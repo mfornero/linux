@@ -51,6 +51,9 @@ int fcse_pid_alloc(struct mm_struct *mm);
 void fcse_pid_free(struct mm_struct *mm);
 unsigned fcse_flush_all_start(void);
 void fcse_flush_all_done(unsigned seq, unsigned dirty);
+unsigned long
+fcse_check_mmap_inner(struct mm_struct *mm, unsigned long start_addr,
+		      unsigned long addr, unsigned long len, unsigned long fl);
 
 /* Sets the CPU's PID Register */
 static inline void fcse_pid_set(unsigned long pid)
@@ -101,6 +104,16 @@ static inline int fcse_mm_in_cache(struct mm_struct *mm)
 	return test_bit(FCSE_PID_MAX - fcse_pid, fcse_pids_cache_dirty);
 }
 
+static inline unsigned long
+fcse_check_mmap_addr(struct mm_struct *mm, unsigned long start_addr,
+		     unsigned long addr, unsigned long len, unsigned long fl)
+{
+       if (addr + len <= FCSE_TASK_SIZE)
+	       return addr;
+
+       return fcse_check_mmap_inner(mm, start_addr, addr, len, fl);
+}
+
 static inline void fcse_mark_dirty(struct mm_struct *mm)
 {
 	if (cache_is_vivt()) {
@@ -120,4 +133,12 @@ static inline void fcse_mark_dirty(struct mm_struct *mm)
 #define fcse_mm_in_cache(mm) \
 		(cpumask_test_cpu(smp_processor_id(), mm_cpumask(mm)))
 #endif /* ! CONFIG_ARM_FCSE */
+
+#ifdef CONFIG_ARM_FCSE_MESSAGES
+void fcse_notify_segv(struct mm_struct *mm,
+		      unsigned long addr, struct pt_regs *regs);
+#else /* !FCSE_MESSAGES */
+#define fcse_notify_segv(mm, addr, regs) do { } while(0)
+#endif /* !FCSE_MESSAGES */
+
 #endif /* __ASM_ARM_FCSE_H */

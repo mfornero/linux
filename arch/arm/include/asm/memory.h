@@ -37,7 +37,12 @@
  */
 #define PAGE_OFFSET		UL(CONFIG_PAGE_OFFSET)
 #define TASK_SIZE		(UL(CONFIG_PAGE_OFFSET) - UL(0x01000000))
+#ifndef CONFIG_ARM_FCSE
 #define TASK_UNMAPPED_BASE	(UL(CONFIG_PAGE_OFFSET) / 3)
+#else /* CONFIG_ARM_FCSE */
+#define TASK_UNMAPPED_BASE	UL(0x00800000)
+#define FCSE_TASK_SIZE		UL(0x02000000)
+#endif /* CONFIG_ARM_FCSE */
 
 /*
  * The maximum size of a 26-bit user space task.
