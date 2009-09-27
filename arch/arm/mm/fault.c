@@ -25,6 +25,7 @@
 #include <asm/system_misc.h>
 #include <asm/system_info.h>
 #include <asm/tlbflush.h>
+#include <asm/fcse.h>
 
 #include "fault.h"
 
@@ -546,6 +547,8 @@ do_DataAbort(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 {
 	const struct fsr_info *inf = fsr_info + fsr_fs(fsr);
 	struct siginfo info;
+
+	addr = fcse_mva_to_va(addr);
 
 	if (!inf->fn(addr, fsr & ~FSR_LNX_PF, regs))
 		return;

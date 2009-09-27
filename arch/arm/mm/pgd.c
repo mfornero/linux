@@ -67,6 +67,11 @@ pgd_t *pgd_alloc(struct mm_struct *mm)
 #endif
 
 	if (!vectors_high()) {
+#ifdef CONFIG_ARM_FCSE
+		/* FCSE does not work without high vectors. */
+		BUG();
+#endif /* CONFIG_ARM_FCSE */
+
 		/*
 		 * On ARM, first page must always be allocated since it
 		 * contains the machine vectors. The vectors are always high
@@ -118,7 +123,7 @@ void pgd_free(struct mm_struct *mm, pgd_t *pgd_base)
 	if (pgd_none_or_clear_bad(pgd))
 		goto no_pgd;
 
-	pud = pud_offset(pgd, 0);
+	pud = pud_offset(pgd + pgd_index(fcse_va_to_mva(mm, 0)), 0);
 	if (pud_none_or_clear_bad(pud))
 		goto no_pud;
 

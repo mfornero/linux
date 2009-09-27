@@ -79,6 +79,7 @@ init_new_context(struct task_struct *tsk, struct mm_struct *mm)
 		return fcse_pid;
 	}
 	mm->context.fcse.pid = fcse_pid << FCSE_PID_SHIFT;
+	FCSE_BUG_ON(fcse_mm_in_cache(mm));
 #endif /* CONFIG_ARM_FCSE */
 
 	return 0;
@@ -132,7 +133,8 @@ switch_mm(struct mm_struct *prev, struct mm_struct *next,
 		check_and_switch_context(next, tsk);
 		if (cache_is_vivt())
 			cpumask_clear_cpu(cpu, mm_cpumask(prev));
-	}
+	} else
+		fcse_mark_dirty(next);
 #endif
 }
 
