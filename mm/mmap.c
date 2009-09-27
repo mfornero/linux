@@ -40,6 +40,10 @@
 
 #include "internal.h"
 
+#ifndef MMAP_BRK
+#define MMAP_BRK 0
+#endif
+
 #ifndef arch_mmap_check
 #define arch_mmap_check(addr, len, flags)	(0)
 #endif

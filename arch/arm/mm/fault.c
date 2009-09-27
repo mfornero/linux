@@ -179,6 +179,8 @@ __do_user_fault(struct task_struct *tsk, unsigned long addr,
 	}
 #endif
 
+	fcse_notify_segv(tsk->mm, addr, regs);
+
 	tsk->thread.address = addr;
 	tsk->thread.error_code = fsr;
 	tsk->thread.trap_no = 14;

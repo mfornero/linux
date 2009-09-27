@@ -26,6 +26,7 @@
 #include <asm/fcse.h>
 #include <asm/cacheflush.h>
 #include <asm/tlbflush.h>
+#include <asm/system_misc.h>	/* For user_debug, UDBG_SEGV */
 
 #define PIDS_LONGS ((FCSE_NR_PIDS + BITS_PER_LONG - 1) / BITS_PER_LONG)
 
@@ -131,3 +132,115 @@ fcse_flush_all_done(unsigned seq, unsigned dirty)
 	preempt_enable();
 #endif /* CONFIG_ARM_FCSE_PREEMPT_FLUSH */
 }
+
+unsigned long
+fcse_check_mmap_inner(struct mm_struct *mm,
+		      struct vm_unmapped_area_info *info, 
+		      unsigned long addr, unsigned long flags)
+{
+	if (flags & MAP_FIXED)
+		goto skip_retry;
+ 
+        /* Try again the mmap, allowing addresses above 32 MB */
+	info->flags = 0;
+        info->low_limit = PAGE_ALIGN(mm->start_stack);
+	info->high_limit = FCSE_TASK_SIZE;
+        addr = vm_unmapped_area(info);
+ 
+	if ((addr & ~PAGE_MASK) == 0 && addr + info->length <= FCSE_TASK_SIZE)
+                return addr;
+        
+	/* Could not find an address */
+  skip_retry:
+#ifdef CONFIG_ARM_FCSE_MESSAGES
+	if ((flags & MAP_BRK) == 0)
+		printk(KERN_WARNING 
+		       "FCSE: process %u(%s) VM would exceed the 32MB limit.\n",
+		       current->pid, current->comm);
+#endif /* CONFIG_ARM_FCSE_MESSAGES */
+	return -ENOMEM;
+}
+
+#ifdef CONFIG_ARM_FCSE_MESSAGES
+#define addr_in_vma(vma, addr)						\
+	({								\
+		struct vm_area_struct *_vma = (vma);			\
+		((unsigned long)((addr) - _vma->vm_start)		\
+		 < (unsigned long)((_vma->vm_end - _vma->vm_start)));	\
+	})
+
+#ifdef CONFIG_DEBUG_USER
+static noinline void
+dump_vmas(struct mm_struct *mm, unsigned long addr, struct pt_regs *regs)
+{
+	struct vm_area_struct *vma;
+	char path[128];
+	int locked = 0;
+
+	printk("mappings:\n");
+	if (!in_atomic())
+		locked = down_read_trylock(&mm->mmap_sem);
+	for(vma = mm->mmap; vma; vma = vma->vm_next) {
+		struct file *file = vma->vm_file;
+		int flags = vma->vm_flags;
+		const char *name;
+
+		printk("0x%08lx-0x%08lx %c%c%c%c 0x%08llx ",
+		       vma->vm_start,
+		       vma->vm_end,
+		       flags & VM_READ ? 'r' : '-',
+		       flags & VM_WRITE ? 'w' : '-',
+		       flags & VM_EXEC ? 'x' : '-',
+		       flags & VM_MAYSHARE ? 's' : 'p',
+		       ((loff_t)vma->vm_pgoff) << PAGE_SHIFT);
+
+		if (file)
+			name = d_path(&file->f_path, path, sizeof(path));
+		else if ((name = arch_vma_name(vma)))
+			;
+		else if (!vma->vm_mm)
+			name = "[vdso]";
+		else if (vma->vm_start <= mm->start_brk
+			 && vma->vm_end >= mm->brk)
+			name = "[heap]";
+		else if (vma->vm_start <= mm->start_stack &&
+			 vma->vm_end >= mm->start_stack)
+			name = "[stack]";
+		else
+			name = "";
+		printk("%s", name);
+		if (addr_in_vma(vma, regs->ARM_pc))
+			printk(" <- PC");
+		if (addr_in_vma(vma, regs->ARM_sp))
+			printk(" <- SP");
+		if (addr_in_vma(vma, addr))
+			printk("%s fault",
+			       (addr_in_vma(vma, regs->ARM_pc)
+				|| addr_in_vma(vma, regs->ARM_sp)
+				? "," : " <-"));
+		printk("\n");
+	}
+	if (locked)
+		up_read(&mm->mmap_sem);
+}
+#endif /* CONFIG_DEBUG_USER */
+
+void fcse_notify_segv(struct mm_struct *mm,
+		       unsigned long addr, struct pt_regs *regs)
+{
+	int locked = 0;
+
+#if defined(CONFIG_DEBUG_USER)
+	if (user_debug & UDBG_SEGV)
+		dump_vmas(mm, addr, regs);
+#endif /* CONFIG_DEBUG_USER */
+
+	if (!in_atomic())
+		locked = down_read_trylock(&mm->mmap_sem);
+	if (find_vma(mm, addr) == find_vma(mm, regs->ARM_sp))
+		printk(KERN_INFO "FCSE: process %u(%s) probably overflowed stack at 0x%08lx.\n",
+		       current->pid, current->comm, regs->ARM_pc);
+	if (locked)
+		up_read(&mm->mmap_sem);
+}
+#endif /* CONFIG_ARM_FCSE_MESSAGES */
