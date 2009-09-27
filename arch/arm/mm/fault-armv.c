@@ -65,6 +65,7 @@ static int do_adjust_pte(struct vm_area_struct *vma, unsigned long address,
 	return ret;
 }
 
+#ifndef CONFIG_ARM_FCSE_GUARANTEED
 #if USE_SPLIT_PTLOCKS
 /*
  * If we are using split PTE locks, then we need to take the page
@@ -127,11 +128,13 @@ static int adjust_pte(struct vm_area_struct *vma, unsigned long address,
 
 	return ret;
 }
+#endif /* CONFIG_ARM_FCSE_GUARANTEED */
 
 static void
 make_coherent(struct address_space *mapping, struct vm_area_struct *vma,
 	unsigned long addr, pte_t *ptep, unsigned long pfn)
 {
+#ifndef CONFIG_ARM_FCSE_GUARANTEED
 	struct mm_struct *mm = vma->vm_mm;
 	struct vm_area_struct *mpnt;
 	unsigned long offset;
@@ -162,6 +165,10 @@ make_coherent(struct address_space *mapping, struct vm_area_struct *vma,
 	flush_dcache_mmap_unlock(mapping);
 	if (aliases)
 		do_adjust_pte(vma, addr, pfn, ptep);
+#else /* CONFIG_ARM_FCSE_GUARANTEED */
+	if (vma->vm_flags & VM_MAYSHARE)
+		do_adjust_pte(vma, addr, pfn, ptep);
+#endif /* CONFIG_ARM_FCSE_GUARANTEED */
 }
 
 /*
