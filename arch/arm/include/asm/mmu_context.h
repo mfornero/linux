@@ -87,15 +87,6 @@ init_new_context(struct task_struct *tsk, struct mm_struct *mm)
 
 #endif	/* CONFIG_CPU_HAS_ASID */
 
-#define activate_mm(prev,next)		switch_mm(prev, next, NULL)
-static inline void destroy_context(struct mm_struct *mm)
-{
-#ifdef CONFIG_ARM_FCSE
-	if (mm->context.fcse.pid != FCSE_PID_INVALID)
-		fcse_pid_free(mm);
-#endif /* CONFIG_ARM_FCSE */
-}
-
 /*
  * This is called when "tsk" is about to enter lazy TLB mode.
  *
@@ -139,5 +130,23 @@ switch_mm(struct mm_struct *prev, struct mm_struct *next,
 }
 
 #define deactivate_mm(tsk,mm)	do { } while (0)
+
+#ifndef CONFIG_ARM_FCSE_BEST_EFFORT
+#define activate_mm(prev,next) switch_mm(prev, next, NULL)
+#else /* CONFIG_ARM_FCSE_BEST_EFFORT */
+#define activate_mm(prev,next)                                         \
+       ({                                                              \
+       switch_mm(prev, next, NULL);                                    \
+       FCSE_BUG_ON(current->mm == next && !fcse_mm_in_cache(next));    \
+       })
+#endif /* CONFIG_ARM_FCSE_BEST_EFFORT */
+static inline void destroy_context(struct mm_struct *mm)
+{
+#ifdef CONFIG_ARM_FCSE
+	if (mm->context.fcse.pid != FCSE_PID_INVALID)
+		fcse_pid_free(mm);
+#endif /* CONFIG_ARM_FCSE */
+}
+
 
 #endif
