@@ -84,6 +84,41 @@ fcse_va_to_mva(struct mm_struct *mm, unsigned long va)
 	return va;
 }
 
+#ifdef CONFIG_ARM_FCSE_BEST_EFFORT
+struct fcse_user {
+	struct mm_struct *mm;
+	unsigned count;
+};
+extern struct fcse_user fcse_pids_user[];
+int fcse_switch_mm_inner(struct mm_struct *next);
+
+static inline int fcse_switch_mm(struct mm_struct *next)
+{
+	if (!cache_is_vivt())
+		return 0;
+
+	return fcse_switch_mm_inner(next);
+}
+
+static inline int fcse_mm_in_cache(struct mm_struct *mm)
+{
+	unsigned fcse_pid = mm->context.fcse.pid >> FCSE_PID_SHIFT;
+	int res;
+	res = test_bit(FCSE_PID_MAX - fcse_pid, fcse_pids_cache_dirty)
+		&& fcse_pids_user[fcse_pid].mm == mm;
+	return res;
+}
+
+static inline unsigned long
+fcse_check_mmap_addr(struct mm_struct *mm, unsigned long start_addr,
+		     unsigned long addr, unsigned long len, unsigned long fl)
+{
+       if (addr + len <= FCSE_TASK_SIZE)
+	       return addr;
+
+       return fcse_check_mmap_inner(mm, start_addr, addr, len, fl);
+}
+#else /* CONFIG_ARM_FCSE_GUARANTEED */
 static inline int
 fcse_switch_mm(struct mm_struct *next)
 {
@@ -113,6 +148,7 @@ fcse_check_mmap_addr(struct mm_struct *mm, unsigned long start_addr,
 
        return fcse_check_mmap_inner(mm, start_addr, addr, len, fl);
 }
+#endif /* CONFIG_ARM_FCSE_GUARANTEED */
 
 static inline void fcse_mark_dirty(struct mm_struct *mm)
 {

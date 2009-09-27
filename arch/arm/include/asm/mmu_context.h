@@ -214,6 +214,15 @@ switch_mm(struct mm_struct *prev, struct mm_struct *next,
 }
 
 #define deactivate_mm(tsk,mm)	do { } while (0)
-#define activate_mm(prev,next)	switch_mm(prev, next, NULL)
+
+#ifndef CONFIG_ARM_FCSE_BEST_EFFORT
+#define activate_mm(prev,next) switch_mm(prev, next, NULL)
+#else /* CONFIG_ARM_FCSE_BEST_EFFORT */
+#define activate_mm(prev,next)                                         \
+       ({                                                              \
+       switch_mm(prev, next, NULL);                                    \
+       FCSE_BUG_ON(current->mm == next && !fcse_mm_in_cache(next));    \
+       })
+#endif /* CONFIG_ARM_FCSE_BEST_EFFORT */
 
 #endif
