@@ -8,6 +8,11 @@ typedef struct {
 	unsigned int id;
 	raw_spinlock_t id_lock;
 #endif
+#ifdef CONFIG_ARM_FCSE
+	struct {
+		unsigned long pid;
+	} fcse;
+#endif /* CONFIG_ARM_FCSE */
 	unsigned int kvm_seq;
 } mm_context_t;
 
