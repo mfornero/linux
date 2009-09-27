@@ -39,8 +39,18 @@
 #define FCSE_NR_PIDS (TASK_SIZE / FCSE_PID_TASK_SIZE)
 #define FCSE_PID_MAX (FCSE_NR_PIDS - 1)
 
+#ifdef CONFIG_ARM_FCSE_DEBUG
+#define FCSE_BUG_ON(expr) BUG_ON(expr)
+#else /* !CONFIG_ARM_FCSE_DEBUG */
+#define FCSE_BUG_ON(expr) do { } while(0)
+#endif /* !CONFIG_ARM_FCSE_DEBUG */
+
+extern unsigned long fcse_pids_cache_dirty[];
+
 int fcse_pid_alloc(struct mm_struct *mm);
 void fcse_pid_free(struct mm_struct *mm);
+unsigned fcse_flush_all_start(void);
+void fcse_flush_all_done(unsigned seq, unsigned dirty);
 
 /* Sets the CPU's PID Register */
 static inline void fcse_pid_set(unsigned long pid)
@@ -49,18 +59,65 @@ static inline void fcse_pid_set(unsigned long pid)
 			      : /* */: "r" (pid) : "cc", "memory");
 }
 
+static inline unsigned long fcse_mva_to_va(unsigned long mva)
+{
+	unsigned long va;
+
+	if (!cache_is_vivt())
+		return mva;
+
+	__asm__ __volatile__ ("mrc p15, 0, %0, c13, c0, 0"
+			      : "=r"(va) : /* */ : "cc", "memory");
+	va ^= mva;
+	return (va & 0xfe000000) ? mva : va;
+}
+
+static inline unsigned long
+fcse_va_to_mva(struct mm_struct *mm, unsigned long va)
+{
+	if (cache_is_vivt() && va < FCSE_PID_TASK_SIZE) {
+		return mm->context.fcse.pid | va;
+	}
+	return va;
+}
+
 static inline int
 fcse_switch_mm(struct mm_struct *next)
 {
+	unsigned fcse_pid;
 
 	if (!cache_is_vivt())
 		return 0;
 
+	fcse_pid = next->context.fcse.pid >> FCSE_PID_SHIFT;
+	set_bit(FCSE_PID_MAX - fcse_pid, fcse_pids_cache_dirty);
 	fcse_pid_set(next->context.fcse.pid);
 	return 0;
 }
 
+static inline int fcse_mm_in_cache(struct mm_struct *mm)
+{
+	unsigned fcse_pid = mm->context.fcse.pid >> FCSE_PID_SHIFT;
+	return test_bit(FCSE_PID_MAX - fcse_pid, fcse_pids_cache_dirty);
+}
+
+static inline void fcse_mark_dirty(struct mm_struct *mm)
+{
+	if (cache_is_vivt()) {
+		set_bit(FCSE_PID_MAX - (mm->context.fcse.pid >> FCSE_PID_SHIFT),
+			fcse_pids_cache_dirty);
+		FCSE_BUG_ON(!fcse_mm_in_cache(mm));
+	}
+}
+
 #else /* ! CONFIG_ARM_FCSE */
 #define fcse_switch_mm(next) 1
+#define fcse_mva_to_va(mva) (mva)
+#define fcse_va_to_mva(mm, x) ({ (void)(mm); (x); })
+#define fcse_mark_dirty(mm) do { (void)(mm); } while(0)
+#define fcse_flush_all_start() (0)
+#define fcse_flush_all_done(seq, dirty) do { (void)(seq); } while (0)
+#define fcse_mm_in_cache(mm) \
+		(cpumask_test_cpu(smp_processor_id(), mm_cpumask(mm)))
 #endif /* ! CONFIG_ARM_FCSE */
 #endif /* __ASM_ARM_FCSE_H */
