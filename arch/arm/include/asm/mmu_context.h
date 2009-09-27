@@ -19,6 +19,7 @@
 #include <asm/cachetype.h>
 #include <asm/proc-fns.h>
 #include <asm-generic/mm_hooks.h>
+#include <asm/fcse.h>
 
 void __check_vmalloc_seq(struct mm_struct *mm);
 
@@ -47,7 +48,7 @@ static inline void check_and_switch_context(struct mm_struct *mm,
 		 */
 		set_ti_thread_flag(task_thread_info(tsk), TIF_SWITCH_MM);
 	else
-		cpu_switch_mm(mm->pgd, mm);
+		cpu_switch_mm(mm->pgd, mm, fcse_switch_mm(mm));
 }
 
 #define finish_arch_post_lock_switch \
@@ -56,18 +57,43 @@ static inline void finish_arch_post_lock_switch(void)
 {
 	if (test_and_clear_thread_flag(TIF_SWITCH_MM)) {
 		struct mm_struct *mm = current->mm;
-		cpu_switch_mm(mm->pgd, mm);
+		cpu_switch_mm(mm->pgd, mm, fcse_switch_mm(mm));
 	}
 }
 
 #endif	/* CONFIG_MMU */
 
-#define init_new_context(tsk,mm)	0
+static inline int
+init_new_context(struct task_struct *tsk, struct mm_struct *mm)
+{
+#ifdef CONFIG_ARM_FCSE
+	int fcse_pid;
+
+	fcse_pid = fcse_pid_alloc(mm);
+	if (fcse_pid < 0) {
+		/*
+		 * Set mm pid to FCSE_PID_INVALID, as even when
+		 * init_new_context fails, destroy_context is called.
+		 */
+		mm->context.fcse.pid = FCSE_PID_INVALID;
+		return fcse_pid;
+	}
+	mm->context.fcse.pid = fcse_pid << FCSE_PID_SHIFT;
+#endif /* CONFIG_ARM_FCSE */
+
+	return 0;
+}
 
 #endif	/* CONFIG_CPU_HAS_ASID */
 
-#define destroy_context(mm)		do { } while(0)
 #define activate_mm(prev,next)		switch_mm(prev, next, NULL)
+static inline void destroy_context(struct mm_struct *mm)
+{
+#ifdef CONFIG_ARM_FCSE
+	if (mm->context.fcse.pid != FCSE_PID_INVALID)
+		fcse_pid_free(mm);
+#endif /* CONFIG_ARM_FCSE */
+}
 
 /*
  * This is called when "tsk" is about to enter lazy TLB mode.

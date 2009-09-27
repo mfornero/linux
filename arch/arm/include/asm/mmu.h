@@ -7,6 +7,11 @@ typedef struct {
 #ifdef CONFIG_CPU_HAS_ASID
 	u64 id;
 #endif
+#ifdef CONFIG_ARM_FCSE
+	struct {
+		unsigned long pid;
+	} fcse;
+#endif /* CONFIG_ARM_FCSE */
 	unsigned int vmalloc_seq;
 } mm_context_t;
 
