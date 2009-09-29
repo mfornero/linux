@@ -146,6 +146,37 @@ extern pgprot_t phys_mem_access_prot(struct file *file, unsigned long pfn,
 #define __S111  __PAGE_SHARED_EXEC
 
 #ifndef __ASSEMBLY__
+#ifdef CONFIG_ARM_FCSE_BEST_EFFORT
+#define fcse_account_page_removal(mm, addr, val) do {		\
+	struct mm_struct *_mm = (mm);				\
+	unsigned long _addr = (addr);				\
+	unsigned long _val = (val);				\
+	if (pte_present(_val) && _addr < TASK_SIZE) {		\
+		if (_addr >= FCSE_TASK_SIZE			\
+		    && 0 == --_mm->context.fcse.high_pages)	\
+			mm->context.fcse.highest_pid = 0;	\
+	}							\
+} while (0)
+
+#define fcse_account_page_addition(mm, addr, val) ({			\
+	struct mm_struct *_mm = (mm);					\
+	unsigned long _addr = (addr);					\
+	unsigned long _val = (val);					\
+	if (pte_present(_val)						\
+	    && _addr < TASK_SIZE && _addr >= FCSE_TASK_SIZE) {		\
+		unsigned long pid = _addr / FCSE_TASK_SIZE;		\
+		++_mm->context.fcse.high_pages;				\
+		BUG_ON(mm->context.fcse.large == 0);			\
+		if (pid > mm->context.fcse.highest_pid)			\
+			mm->context.fcse.highest_pid = pid;		\
+	}								\
+	_val;								\
+})
+#else /* CONFIG_ARM_FCSE_GUARANTEED || !CONFIG_ARM_FCSE */
+#define fcse_account_page_removal(mm, addr, val) do { } while (0)
+#define fcse_account_page_addition(mm, addr, val) (val)
+#endif /* CONFIG_ARM_FCSE_GUARANTEED || !CONFIG_ARM_FCSE */
+
 /*
  * ZERO_PAGE is a global shared page that is always zero: used
  * for zero-mapped memory areas etc..
@@ -199,7 +230,10 @@ static inline pte_t *pmd_page_vaddr(pmd_t pmd)
 #define pte_page(pte)		pfn_to_page(pte_pfn(pte))
 #define mk_pte(page,prot)	pfn_pte(page_to_pfn(page), prot)
 
-#define pte_clear(mm,addr,ptep)	set_pte_ext(ptep, __pte(0), 0)
+#define pte_clear(mm,addr,ptep)	do {				\
+	fcse_account_page_removal(mm, addr, pte_val(*ptep));	\
+	set_pte_ext(ptep, __pte(0), 0);				\
+} while (0)
 
 #define pte_none(pte)		(!pte_val(pte))
 #define pte_present(pte)	(pte_val(pte) & L_PTE_PRESENT)
@@ -220,9 +254,13 @@ extern void __sync_icache_dcache(pte_t pteval);
 #endif
 
 static inline void set_pte_at(struct mm_struct *mm, unsigned long addr,
-			      pte_t *ptep, pte_t pteval)
+				pte_t *ptep, pte_t pteval)
 {
 	unsigned long ext = 0;
+
+	fcse_account_page_removal(mm, addr, pte_val(*ptep));
+	pte_val(pteval) =
+		fcse_account_page_addition(mm, addr, pte_val(pteval));
 
 	if (addr < TASK_SIZE && pte_present_user(pteval)) {
 		__sync_icache_dcache(pteval);

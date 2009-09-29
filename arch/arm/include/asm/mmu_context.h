@@ -69,6 +69,21 @@ init_new_context(struct task_struct *tsk, struct mm_struct *mm)
 #ifdef CONFIG_ARM_FCSE
 	int fcse_pid;
 
+#ifdef CONFIG_ARM_FCSE_BEST_EFFORT
+	if (!mm->context.fcse.large) {
+		fcse_pid = fcse_pid_alloc(mm);
+		mm->context.fcse.pid = fcse_pid << FCSE_PID_SHIFT;
+	} else {
+		/* We are normally forking a process vith a virtual address
+		   space larger than 32 MB, so its pid should be 0. */
+		FCSE_BUG_ON(mm->context.fcse.pid);
+		fcse_pid_reference(0);
+	}
+	/* If we are forking, set_pte_at will restore the correct high pages
+	   count, and shared writable pages are write-protected again. */
+	mm->context.fcse.high_pages = 0;
+	mm->context.fcse.highest_pid = 0;
+#else /* CONFIG_ARM_FCSE_GUARANTEED */
 	fcse_pid = fcse_pid_alloc(mm);
 	if (fcse_pid < 0) {
 		/*
@@ -79,6 +94,7 @@ init_new_context(struct task_struct *tsk, struct mm_struct *mm)
 		return fcse_pid;
 	}
 	mm->context.fcse.pid = fcse_pid << FCSE_PID_SHIFT;
+#endif /* CONFIG_ARM_FCSE_GUARANTEED */
 	FCSE_BUG_ON(fcse_mm_in_cache(mm));
 #endif /* CONFIG_ARM_FCSE */
 
@@ -143,10 +159,12 @@ switch_mm(struct mm_struct *prev, struct mm_struct *next,
 static inline void destroy_context(struct mm_struct *mm)
 {
 #ifdef CONFIG_ARM_FCSE
+#ifdef CONFIG_ARM_FCSE_BEST_EFFORT
+	FCSE_BUG_ON(mm->context.fcse.high_pages);
+#endif /* CONFIG_ARM_FCSE_BEST_EFFORT */
 	if (mm->context.fcse.pid != FCSE_PID_INVALID)
 		fcse_pid_free(mm);
 #endif /* CONFIG_ARM_FCSE */
 }
-
 
 #endif

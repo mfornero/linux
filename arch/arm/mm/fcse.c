@@ -37,7 +37,8 @@ EXPORT_SYMBOL(fcse_pids_cache_dirty);
 
 #ifdef CONFIG_ARM_FCSE_BEST_EFFORT
 static unsigned random_pid;
-struct fcse_user fcse_pids_user[NR_PIDS];
+struct mm_struct *fcse_large_process;
+struct fcse_user fcse_pids_user[FCSE_NR_PIDS];
 #endif /* CONFIG_ARM_FCSE_BEST_EFFORT */
 
 static inline void fcse_pid_reference_inner(unsigned fcse_pid)
@@ -72,6 +73,8 @@ static inline void fcse_pid_dereference(struct mm_struct *mm)
 		fcse_pids_user[fcse_pid].mm = NULL;
 		__clear_bit(FCSE_PID_MAX - fcse_pid, fcse_pids_cache_dirty);
 	}
+	if (fcse_large_process == mm)
+		fcse_large_process = NULL;
 #else /* CONFIG_ARM_FCSE_BEST_EFFORT */
 	__clear_bit(FCSE_PID_MAX - fcse_pid, fcse_pids_bits);
 	__clear_bit(FCSE_PID_MAX - fcse_pid, fcse_pids_cache_dirty);
@@ -104,8 +107,15 @@ int fcse_pid_alloc(struct mm_struct *mm)
 		   processes with address space larger than 32MB in
 		   best-effort mode. */
 #ifdef CONFIG_ARM_FCSE_BEST_EFFORT
-		if(++random_pid == FCSE_NR_PIDS)
-			random_pid = 0;
+		if(++random_pid == FCSE_NR_PIDS) {
+			if (fcse_large_process) {
+				random_pid =
+					fcse_large_process->context.fcse.highest_pid + 1;
+				if (random_pid == FCSE_NR_PIDS)
+					random_pid = 0;
+			} else
+				random_pid = 0;
+		}
 		fcse_pid = random_pid;
 #else /* CONFIG_ARM_FCSE_GUARANTEED */
 		raw_spin_unlock_irqrestore(&fcse_lock, flags);
@@ -132,6 +142,9 @@ static inline void fcse_clear_dirty_all(void)
 	case 1:
 		fcse_pids_cache_dirty[0] = 0UL;
 	}
+#ifdef CONFIG_ARM_FCSE_BEST_EFFORT
+	fcse_large_process = NULL;
+#endif
 }
 
 unsigned fcse_flush_all_start(void)
@@ -173,6 +186,35 @@ fcse_flush_all_done(unsigned seq, unsigned dirty)
 }
 
 #ifdef CONFIG_ARM_FCSE_BEST_EFFORT
+/* Called with preemption disabled, mm->mmap_sem being held for writing. */
+static noinline int fcse_relocate_mm_to_pid(struct mm_struct *mm, int fcse_pid)
+{
+	const unsigned len = pgd_index(FCSE_TASK_SIZE) * sizeof(pgd_t);
+	unsigned long flags;
+	pgd_t *from, *to;
+
+	raw_spin_lock_irqsave(&fcse_lock, flags);
+	fcse_pid_dereference(mm);
+	fcse_pid_reference_inner(fcse_pid);
+	fcse_pids_user[fcse_pid].mm = mm;
+	__set_bit(FCSE_PID_MAX - fcse_pid, fcse_pids_cache_dirty);
+	if (mm->context.fcse.large)
+		fcse_large_process = mm;
+	raw_spin_unlock_irqrestore(&fcse_lock, flags);
+
+	from = pgd_offset(mm, 0);
+	mm->context.fcse.pid = fcse_pid << FCSE_PID_SHIFT;
+	to = pgd_offset(mm, 0);
+
+	memcpy(to, from, len);
+	memset(from, '\0', len);
+	barrier();
+	clean_dcache_area(from, len);
+	clean_dcache_area(to, len);
+
+	return fcse_pid;
+}
+
 int fcse_switch_mm_inner(struct mm_struct *next)
 {
 	unsigned fcse_pid = next->context.fcse.pid >> FCSE_PID_SHIFT;
@@ -193,18 +235,64 @@ int fcse_switch_mm_inner(struct mm_struct *next)
 		fcse_pids_user[fcse_pid].mm = next;
 	}
 
+	if (!reused_pid
+	    && fcse_large_process
+	    && fcse_large_process != next
+	    && fcse_pid <= fcse_large_process->context.fcse.highest_pid)
+		reused_pid = 1;
+
   is_flush_needed:
-	flush_needed = reused_pid;
+	flush_needed = reused_pid
+		|| prev->context.fcse.shared_dirty_pages;
 
 	fcse_pid_set(fcse_pid << FCSE_PID_SHIFT);
 	if (flush_needed)
 		fcse_clear_dirty_all();
-	if (next != &init_mm)
-		__set_bit(fcse_pid, fcse_pids_cache_dirty);
+	if (next != &init_mm) {
+		__set_bit(FCSE_PID_MAX - fcse_pid, fcse_pids_cache_dirty);
+		if (next->context.fcse.large)
+			fcse_large_process = next;
+	}
 	prev = next;
 	raw_spin_unlock_irqrestore(&fcse_lock, flags);
 
 	return flush_needed;
+}
+
+void fcse_pid_reference(unsigned fcse_pid)
+{
+	unsigned long flags;
+
+	raw_spin_lock_irqsave(&fcse_lock, flags);
+	fcse_pid_reference_inner(fcse_pid);
+	raw_spin_unlock_irqrestore(&fcse_lock, flags);
+}
+
+/* Called with mm->mmap_sem write-locked. */
+static noinline void fcse_relocate_mm_to_null_pid(struct mm_struct *mm)
+{
+	if (!cache_is_vivt())
+		return;
+
+	preempt_disable();
+	while (fcse_mm_in_cache(mm)) {
+		unsigned seq;
+
+		preempt_enable();
+
+		seq = fcse_flush_all_start();
+		flush_cache_all();
+
+		preempt_disable();
+		fcse_flush_all_done(seq, 0);
+	}
+
+	fcse_relocate_mm_to_pid(mm, 0);
+	barrier();
+	flush_tlb_mm(mm);
+	fcse_pid_set(0);
+
+	preempt_enable();
 }
 #endif /* CONFIG_ARM_FCSE_BEST_EFFORT */
 
@@ -215,25 +303,51 @@ fcse_check_mmap_inner(struct mm_struct *mm,
 {
 	if (flags & MAP_FIXED)
 		goto skip_retry;
- 
-        /* Try again the mmap, allowing addresses above 32 MB */
+
+	/* Try again the mmap, allowing addresses above 32 MB */
 	info->flags = 0;
-        info->low_limit = PAGE_ALIGN(mm->start_stack);
+	info->low_limit = PAGE_ALIGN(mm->start_stack);
+#ifdef CONFIG_ARM_FCSE_BEST_EFFORT
+	info->high_limit = TASK_SIZE;
+#else /* CONFIG_ARM_FCSE_GUARANTEED */
 	info->high_limit = FCSE_TASK_SIZE;
-        addr = vm_unmapped_area(info);
- 
+#endif /* CONFIG_ARM_FCSE_GUARANTEED */
+	addr = vm_unmapped_area(info);
+
 	if ((addr & ~PAGE_MASK) == 0 && addr + info->length <= FCSE_TASK_SIZE)
-                return addr;
-        
+		return addr;
+
 	/* Could not find an address */
   skip_retry:
+#ifdef CONFIG_ARM_FCSE_BEST_EFFORT
+	/* Could not find an address */
+	if (addr & ~PAGE_MASK)
+		return addr;
+
+	/* It is not the first time this process gets addresses above 32MB */
+	if (mm->context.fcse.large)
+		return addr;
+
+#ifdef CONFIG_ARM_FCSE_MESSAGES
+	printk(KERN_INFO "FCSE: process %u(%s) VM exceeds 32MB.\n",
+	       current->pid, current->comm);
+#endif /* CONFIG_ARM_FCSE_MESSAGES */
+	mm->context.fcse.large = 1;
+	if (mm->context.fcse.pid)
+		fcse_relocate_mm_to_null_pid(mm);
+
+	return addr;
+
+#else /* CONFIG_ARM_FCSE_GUARANTEED */
+	/* Address above 32MB, no 32MB processes in guaranteed mode. */
 #ifdef CONFIG_ARM_FCSE_MESSAGES
 	if ((flags & MAP_BRK) == 0)
-		printk(KERN_WARNING 
+		printk(KERN_WARNING
 		       "FCSE: process %u(%s) VM would exceed the 32MB limit.\n",
 		       current->pid, current->comm);
 #endif /* CONFIG_ARM_FCSE_MESSAGES */
 	return -ENOMEM;
+#endif /* CONFIG_ARM_FCSE_GUARANTEED */
 }
 
 #ifdef CONFIG_ARM_FCSE_MESSAGES
