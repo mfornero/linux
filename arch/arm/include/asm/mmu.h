@@ -12,6 +12,7 @@ typedef struct {
 	struct {
 		unsigned long pid;
 #ifdef CONFIG_ARM_FCSE_BEST_EFFORT
+		unsigned shared_dirty_pages;
 		unsigned large : 1;
 		unsigned high_pages;
 		unsigned long highest_pid;
