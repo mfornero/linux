@@ -115,11 +115,15 @@ static inline unsigned long
 fcse_check_mmap_addr(struct mm_struct *mm, unsigned long start_addr,
 		     unsigned long addr, unsigned long len, unsigned long fl)
 {
-       if (addr + len <= FCSE_TASK_SIZE)
+       const unsigned long stack_base = ALIGN(mm->start_stack, PAGE_SIZE)
+	       - current->signal->rlim[RLIMIT_STACK].rlim_cur;
+
+       if (addr + len <= stack_base)
 	       return addr;
 
        return fcse_check_mmap_inner(mm, start_addr, addr, len, fl);
 }
+
 #else /* CONFIG_ARM_FCSE_GUARANTEED */
 static inline int
 fcse_switch_mm(struct mm_struct *next)

@@ -301,6 +301,26 @@ fcse_check_mmap_inner(struct mm_struct *mm, unsigned long start_addr,
 		      unsigned long addr, unsigned long len, unsigned long fl)
 {
 #ifdef CONFIG_ARM_FCSE_BEST_EFFORT
+	unsigned long stack_reserved =
+		current->signal->rlim[RLIMIT_STACK].rlim_cur;
+	unsigned long stack_base = PAGE_ALIGN(mm->start_stack) - stack_reserved;
+
+	/* We enfore the RLIMIT_STACK stack size, and here, the return
+	   address would fall in that reserved stack area */
+	if ((unsigned long)(addr + len - stack_base) < stack_reserved) {
+		/* Restart to try and find a hole, once. */
+		if (start_addr != mm->mmap_base && !(fl & MAP_FIXED)
+		    && !mm->context.fcse.large)
+			return mm->mmap_base;
+
+		/* Forcibly restart from above the stack */
+		if (!(fl & MAP_FIXED))
+			return PAGE_ALIGN(mm->start_stack);
+
+		/* If MAP_FIXED is set, we encroach upon the reserved
+		   stack area. No choice. */
+	}
+
 	/* Address above 32MB */
 	if (addr + len > FCSE_TASK_SIZE && !mm->context.fcse.high_pages) {
 		/* Restart to try and find a hole, once. */
