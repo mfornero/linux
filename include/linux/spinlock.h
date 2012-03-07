@@ -107,7 +107,9 @@ do {								\
 #endif
 #define raw_spin_lock_init(lock)	PICK_SPINOP(_lock_init, lock)
 
-#define raw_spin_is_locked(lock)	arch_spin_is_locked(&(lock)->raw_lock)
+#define __real_raw_spin_is_locked(lock)				\
+	arch_spin_is_locked(&(lock)->raw_lock)
+#define raw_spin_is_locked(lock)	PICK_SPINOP_RET(_is_locked, lock, int)
 
 #ifdef CONFIG_GENERIC_LOCKBREAK
 #define raw_spin_is_contended(lock) ((lock)->break_lock)
