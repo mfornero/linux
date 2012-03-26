@@ -474,15 +474,17 @@ int __ipipe_divert_exception(struct pt_regs *regs, int vector)
 	 * Catch int1 and int3 for kgdb here. They may trigger over
 	 * inconsistent states even when the root domain is active.
 	 */
-#ifdef CONFIG_X86_32
-	if (vector != ex_do_device_not_available)
-#endif
-	{
+	if (kgdb_io_module_registered && (vector == 1 || vector == 3)) {
 		unsigned int condition = 0;
 
-		if (vector == 1)
+		if (vector == 1) {
+			if (!atomic_read(&kgdb_cpu_doing_single_step) != -1 &&
+			    test_thread_flag(TIF_SINGLESTEP))
+				goto skip_kgdb;
 			get_debugreg(condition, 6);
-		if (!kgdb_handle_exception(vector, SIGTRAP, condition, regs)) {
+		}
+		if (!user_mode(regs) &&
+		    !kgdb_handle_exception(vector, SIGTRAP, condition, regs)) {
 			if (root_entry) {
 				ipipe_restore_root_nosync(flags);
 				__fixup_if(root_entry ?
@@ -492,6 +494,7 @@ int __ipipe_divert_exception(struct pt_regs *regs, int vector)
 			return 1;
 		}
 	}
+skip_kgdb:
 #endif /* CONFIG_KGDB */
 
 	if (unlikely(__ipipe_report_trap(vector, regs))) {
