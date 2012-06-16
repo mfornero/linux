@@ -473,6 +473,7 @@ static int __init gate_vma_init(void)
 	gate_vma.vm_page_prot	= PAGE_READONLY_EXEC;
 	gate_vma.vm_flags	= VM_READ | VM_EXEC |
 				  VM_MAYREAD | VM_MAYEXEC;
+	gate_vma.vm_mm          = &init_mm;
 	return 0;
 }
 arch_initcall(gate_vma_init);
