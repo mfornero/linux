@@ -352,7 +352,11 @@ static inline fpu_switch_t switch_fpu_prepare(struct task_struct *old, struct ta
 {
 	fpu_switch_t fpu;
 
+#ifndef CONFIG_IPIPE
 	fpu.preload = tsk_used_math(new) && new->fpu_counter > 5;
+#else
+	fpu.preload = 0;
+#endif
 	if (__thread_has_fpu(old)) {
 		if (!__save_init_fpu(old))
 			cpu = ~0;
@@ -360,15 +364,18 @@ static inline fpu_switch_t switch_fpu_prepare(struct task_struct *old, struct ta
 		old->thread.fpu.has_fpu = 0;	/* But leave fpu_owner_task! */
 
 		/* Don't change CR0.TS if we just switch! */
+#ifndef CONFIG_IPIPE
 		if (fpu.preload) {
 			new->fpu_counter++;
 			__thread_set_has_fpu(new);
 			prefetch(new->thread.fpu.state);
 		} else
+#endif
 			stts();
 	} else {
 		old->fpu_counter = 0;
 		old->thread.fpu.last_cpu = ~0;
+#ifndef CONFIG_IPIPE
 		if (fpu.preload) {
 			new->fpu_counter++;
 			if (fpu_lazy_restore(new, cpu))
@@ -377,6 +384,7 @@ static inline fpu_switch_t switch_fpu_prepare(struct task_struct *old, struct ta
 				prefetch(new->thread.fpu.state);
 			__thread_fpu_begin(new);
 		}
+#endif
 	}
 	return fpu;
 }
@@ -389,10 +397,12 @@ static inline fpu_switch_t switch_fpu_prepare(struct task_struct *old, struct ta
  */
 static inline void switch_fpu_finish(struct task_struct *new, fpu_switch_t fpu)
 {
+#ifndef CONFIG_IPIPE
 	if (fpu.preload) {
 		if (unlikely(restore_fpu_checking(new)))
 			__thread_fpu_end(new);
 	}
+#endif
 }
 
 /*
