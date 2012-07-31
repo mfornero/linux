@@ -2612,10 +2612,10 @@ static void hold_ioapic_irq(struct irq_data *data)
 {
 	struct irq_cfg *cfg = data->chip_data;
 
-	ack_apic_level(data);
 	raw_spin_lock(&ioapic_lock);
 	__mask_ioapic(cfg);
 	raw_spin_unlock(&ioapic_lock);
+	ack_apic_level(data);
 }
 
 static void release_ioapic_irq(struct irq_data *data)
