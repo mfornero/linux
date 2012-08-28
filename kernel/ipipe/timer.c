@@ -317,6 +317,7 @@ void ipipe_timer_stop(unsigned cpu)
 		evtdev->mult = timer->real_mult;
 		evtdev->shift = timer->real_shift;
 		evtdev->set_mode = timer->real_set_mode;
+		evtdev->set_next_event = timer->real_set_next_event;
 		timer->real_mult = timer->real_shift = 0;
 		timer->real_set_mode = NULL;
 		timer->real_set_next_event = NULL;
