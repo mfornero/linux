@@ -2656,12 +2656,12 @@ static void irq_remap_modify_chip_defaults(struct irq_chip *chip)
 #ifdef CONFIG_SMP
 	chip->irq_set_affinity = set_remapped_irq_affinity;
 #ifdef CONFIG_IPIPE
-	chip->irq_move = move_xxapic_irq,
+	chip->irq_move = move_xxapic_irq;
 #endif
 #endif
 #ifdef CONFIG_IPIPE
-	chip->irq_hold = hold_ioapic_irq,
-	chip->irq_release = release_ioapic_irq,
+	chip->irq_hold = hold_ioapic_irq;
+	chip->irq_release = release_ioapic_irq;
 #endif
 }
 #endif /* CONFIG_IRQ_REMAP */
