@@ -161,10 +161,15 @@ static void ipipe_timer_request_sync(void)
 int ipipe_timers_request(const struct cpumask *mask)
 {
 	struct clock_event_device *evtdev;
-	unsigned long long frac;
+	unsigned hrclock_khz, hrtimer_khz;
+	unsigned long long tmp;
 	struct ipipe_timer *t;
 	unsigned long flags;
 	unsigned cpu;
+
+	tmp = __ipipe_hrclock_freq;
+	do_div(tmp, 1000);
+	hrclock_khz = tmp;
 
 	spin_lock_irqsave(&lock, flags);
 	for_each_cpu(cpu, mask) {
@@ -187,12 +192,13 @@ int ipipe_timers_request(const struct cpumask *mask)
 			__ipipe_hrtimer_freq = t->freq;
 		per_cpu(ipipe_percpu.hrtimer_irq, cpu) = t->irq;
 		per_cpu(percpu_timer, cpu) = t;
-		t->c2t_integ = t->freq / __ipipe_hrclock_freq;
-		frac = (((unsigned long long)
-			 (t->freq % __ipipe_hrclock_freq)) << 32)
-			+ __ipipe_hrclock_freq - 1;
-		do_div(frac, __ipipe_hrclock_freq);
-		t->c2t_frac = frac;
+		hrtimer_khz = t->freq / 1000;
+		t->c2t_integ = hrtimer_khz / hrclock_khz;
+		tmp = (((unsigned long long)
+			 (hrtimer_khz % hrclock_khz)) << 32)
+			+ hrclock_khz - 1;
+		do_div(tmp, hrclock_khz);
+		t->c2t_frac = tmp;
 	}
 	spin_unlock_irqrestore(&lock, flags);
 
