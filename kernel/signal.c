@@ -683,6 +683,8 @@ void signal_wake_up(struct task_struct *t, int resume)
 	unsigned int mask;
 
 	set_tsk_thread_flag(t, TIF_SIGPENDING);
+	/* TIF_SIGPENDING must be prior to reporting. */
+	__ipipe_report_sigwake(t);
 
 	/*
 	 * For SIGKILL, we want to wake it up in the stopped/traced/killable

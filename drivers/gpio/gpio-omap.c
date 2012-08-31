@@ -25,6 +25,7 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/irqdomain.h>
+#include <linux/ipipe.h>
 
 #include <mach/hardware.h>
 #include <asm/irq.h>
@@ -63,7 +64,7 @@ struct gpio_bank {
 	u32 saved_datain;
 	u32 level_mask;
 	u32 toggle_mask;
-	spinlock_t lock;
+	ipipe_spinlock_t lock;
 	struct gpio_chip chip;
 	struct clk *dbck;
 	u32 mod_usage;
@@ -83,6 +84,10 @@ struct gpio_bank {
 	int (*get_context_loss_count)(struct device *dev);
 
 	struct omap_gpio_reg_offs *regs;
+#ifdef CONFIG_IPIPE
+	unsigned nonroot;
+	unsigned muted;
+#endif
 };
 
 #define GPIO_INDEX(bank, gpio) (gpio % bank->width)
@@ -336,8 +341,8 @@ static void _toggle_gpio_edge_triggering(struct gpio_bank *bank, int gpio)
 static void _toggle_gpio_edge_triggering(struct gpio_bank *bank, int gpio) {}
 #endif
 
-static int _set_gpio_triggering(struct gpio_bank *bank, int gpio,
-							unsigned trigger)
+static inline int _set_gpio_triggering(struct gpio_bank *bank, int gpio,
+					      unsigned trigger)
 {
 	void __iomem *reg = bank->base;
 	void __iomem *base = bank->base;
@@ -413,7 +418,7 @@ static int gpio_irq_type(struct irq_data *d, unsigned type)
 	return retval;
 }
 
-static void _clear_gpio_irqbank(struct gpio_bank *bank, int gpio_mask)
+static inline void _clear_gpio_irqbank(struct gpio_bank *bank, int gpio_mask)
 {
 	void __iomem *reg = bank->base;
 
@@ -449,7 +454,7 @@ static u32 _get_gpio_irqbank_mask(struct gpio_bank *bank)
 	return l;
 }
 
-static void _enable_gpio_irqbank(struct gpio_bank *bank, int gpio_mask)
+static inline void _enable_gpio_irqbank(struct gpio_bank *bank, int gpio_mask)
 {
 	void __iomem *reg = bank->base;
 	u32 l;
@@ -471,7 +476,7 @@ static void _enable_gpio_irqbank(struct gpio_bank *bank, int gpio_mask)
 	__raw_writel(l, reg);
 }
 
-static void _disable_gpio_irqbank(struct gpio_bank *bank, int gpio_mask)
+static inline void _disable_gpio_irqbank(struct gpio_bank *bank, int gpio_mask)
 {
 	void __iomem *reg = bank->base;
 	u32 l;
@@ -532,7 +537,7 @@ static int _set_gpio_wakeup(struct gpio_bank *bank, int gpio, int enable)
 	return 0;
 }
 
-static void _reset_gpio(struct gpio_bank *bank, int gpio)
+static inline void _reset_gpio(struct gpio_bank *bank, int gpio)
 {
 	_set_gpio_direction(bank, GPIO_INDEX(bank, gpio), 1);
 	_set_gpio_irqenable(bank, gpio, 0);
@@ -653,7 +658,10 @@ static void gpio_irq_handler(unsigned int irq, struct irq_desc *desc)
 
 	bank = irq_get_handler_data(irq);
 	isr_reg = bank->base + bank->regs->irqstatus;
+
+#ifndef CONFIG_IPIPE
 	pm_runtime_get_sync(bank->dev);
+#endif
 
 	if (WARN_ON(!isr_reg))
 		goto exit;
@@ -704,7 +712,7 @@ static void gpio_irq_handler(unsigned int irq, struct irq_desc *desc)
 			if (bank->toggle_mask & (1 << gpio_index))
 				_toggle_gpio_edge_triggering(bank, gpio_index);
 
-			generic_handle_irq(gpio_irq);
+			ipipe_handle_demuxed_irq(gpio_irq);
 		}
 	}
 	/* if bank has any level sensitive GPIO pin interrupt
@@ -714,7 +722,9 @@ static void gpio_irq_handler(unsigned int irq, struct irq_desc *desc)
 exit:
 	if (!unmasked)
 		chained_irq_exit(chip, desc);
+#ifndef CONFIG_IPIPE
 	pm_runtime_put(bank->dev);
+#endif
 }
 
 static void gpio_irq_shutdown(struct irq_data *d)
@@ -748,6 +758,19 @@ static void gpio_mask_irq(struct irq_data *d)
 	spin_unlock_irqrestore(&bank->lock, flags);
 }
 
+static void gpio_mask_ack_irq(struct irq_data *d)
+{
+	unsigned int gpio = d->irq - IH_GPIO_BASE;
+	struct gpio_bank *bank = irq_data_get_irq_chip_data(d);
+	unsigned long flags;
+
+	spin_lock_irqsave(&bank->lock, flags);
+	_set_gpio_irqenable(bank, gpio, 0);
+	_set_gpio_triggering(bank, GPIO_INDEX(bank, gpio), IRQ_TYPE_NONE);
+	spin_unlock_irqrestore(&bank->lock, flags);
+	_clear_gpio_irqstatus(bank, gpio);
+}
+
 static void gpio_unmask_irq(struct irq_data *d)
 {
 	struct gpio_bank *bank = irq_data_get_irq_chip_data(d);
@@ -776,6 +799,7 @@ static struct irq_chip gpio_irq_chip = {
 	.irq_shutdown	= gpio_irq_shutdown,
 	.irq_ack	= gpio_ack_irq,
 	.irq_mask	= gpio_mask_irq,
+	.irq_mask_ack	= gpio_mask_ack_irq,
 	.irq_unmask	= gpio_unmask_irq,
 	.irq_set_type	= gpio_irq_type,
 	.irq_set_wake	= gpio_wake_enable,
@@ -1049,6 +1073,7 @@ static void __devinit omap_gpio_chip_init(struct gpio_bank *bank)
 			set_irq_flags(j, IRQF_VALID);
 		}
 	}
+
 	irq_set_chained_handler(bank->irq, gpio_irq_handler);
 	irq_set_handler_data(bank->irq, bank);
 }
@@ -1155,6 +1180,149 @@ static int __devinit omap_gpio_probe(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_ARCH_OMAP2PLUS
+
+#if defined(CONFIG_IPIPE)
+extern void omap3_intc_mute(void);
+extern void omap3_intc_unmute(void);
+extern void omap3_intc_set_irq_prio(int irq, int hi);
+extern void gic_mute(void);
+extern void gic_unmute(void);
+extern void gic_set_irq_prio(int irq, int hi);
+
+static inline void omap2plus_pic_set_irq_prio(int irq, int hi)
+{
+	struct irq_desc *desc = irq_to_desc(irq);
+	struct irq_data *idata = irq_desc_get_irq_data(desc);
+
+	if (cpu_is_omap34xx())
+		omap3_intc_set_irq_prio(idata->hwirq, hi);
+	if (cpu_is_omap44xx())
+		gic_set_irq_prio(idata->hwirq, hi);
+}
+
+static void omap2plus_enable_irqdesc(struct ipipe_domain *ipd, unsigned irq)
+{
+	struct irq_desc *desc = irq_to_desc(irq);
+	struct irq_data *idata = irq_desc_get_irq_data(desc);
+	struct irq_chip *chip = irq_data_get_irq_chip(idata);
+
+	if (chip == &gpio_irq_chip) {
+		/* It is a gpio. */
+		struct gpio_bank *bank = irq_data_get_irq_chip_data(idata);
+
+		if (ipd == &ipipe_root) {
+			bank->nonroot &= ~(1 << idata->hwirq);
+			if (bank->nonroot == 0)
+				omap2plus_pic_set_irq_prio(bank->irq, 0);
+		} else {
+			bank->nonroot |= (1 << idata->hwirq);
+			if (bank->nonroot == (1 << idata->hwirq))
+				omap2plus_pic_set_irq_prio(bank->irq, 1);
+		}
+	} else
+		omap2plus_pic_set_irq_prio(irq, ipd != &ipipe_root);
+}
+
+static void omap2plus_disable_irqdesc(struct ipipe_domain *ipd, unsigned irq)
+{
+	struct irq_desc *desc = irq_to_desc(irq);
+	struct irq_data *idata = irq_desc_get_irq_data(desc);
+	struct irq_chip *chip = irq_data_get_irq_chip(idata);
+
+	if (chip == &gpio_irq_chip) {
+		/* It is a gpio. */
+		struct gpio_bank *bank = irq_data_get_irq_chip_data(idata);
+
+		if (ipd != &ipipe_root) {
+			bank->nonroot &= ~(1 << idata->hwirq);
+			if (bank->nonroot == 0)
+				omap2plus_pic_set_irq_prio(bank->irq, 0);
+		}
+	} else if (ipd != &ipipe_root)
+		omap2plus_pic_set_irq_prio(irq, 0);
+}
+
+static inline void omap2plus_mute_gpio(void)
+{
+	struct gpio_bank *bank;
+	unsigned muted;
+
+	list_for_each_entry(bank, &omap_gpio_list, node) {
+		if (bank->nonroot == 0)
+			continue;
+
+		muted = ~bank->nonroot;
+		if (muted)
+			muted &= _get_gpio_irqbank_mask(bank);
+		bank->muted = muted;
+		if (muted)
+			_disable_gpio_irqbank(bank, muted);
+	}
+}
+
+static void omap3_mute_pic(void)
+{
+	omap3_intc_mute();
+
+	omap2plus_mute_gpio();
+}
+
+static void omap4_mute_pic(void)
+{
+	gic_mute();
+
+	omap2plus_mute_gpio();
+}
+
+static inline void omap2plus_unmute_gpio(void)
+{
+	struct gpio_bank *bank;
+	unsigned muted;
+
+	list_for_each_entry(bank, &omap_gpio_list, node) {
+		if (bank->nonroot == 0)
+			continue;
+
+		muted = bank->muted;
+		if (muted)
+			_enable_gpio_irqbank(bank, muted);
+	}
+}
+
+static void omap3_unmute_pic(void)
+{
+	omap2plus_unmute_gpio();
+
+	omap3_intc_unmute();
+}
+
+static void omap4_unmute_pic(void)
+{
+	omap2plus_unmute_gpio();
+
+	gic_unmute();
+}
+
+void __init omap2plus_pic_muter_register(void)
+{
+	struct ipipe_mach_pic_muter muter = {
+		.enable_irqdesc = omap2plus_enable_irqdesc,
+		.disable_irqdesc = omap2plus_disable_irqdesc,
+	};
+
+	if (cpu_is_omap34xx()) {
+		muter.mute = omap3_mute_pic;
+		muter.unmute = omap3_unmute_pic;
+		ipipe_pic_muter_register(&muter);
+	}
+	if (cpu_is_omap44xx()) {
+		muter.mute = omap4_mute_pic;
+		muter.unmute = omap4_unmute_pic;
+		ipipe_pic_muter_register(&muter);
+	}
+}
+
+#endif /* CONFIG_IPIPE */
 
 #if defined(CONFIG_PM_RUNTIME)
 static void omap_gpio_restore_context(struct gpio_bank *bank);

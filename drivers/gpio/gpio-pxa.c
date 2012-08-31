@@ -25,6 +25,7 @@
 #include <linux/platform_device.h>
 #include <linux/syscore_ops.h>
 #include <linux/slab.h>
+#include <linux/ipipe.h>
 
 #include <mach/irqs.h>
 
@@ -91,7 +92,7 @@ enum {
 	MMP_GPIO = 0x10,
 };
 
-static DEFINE_SPINLOCK(gpio_lock);
+static IPIPE_DEFINE_SPINLOCK(gpio_lock);
 static struct pxa_gpio_chip *pxa_gpio_chips;
 static int gpio_type;
 static void __iomem *gpio_reg_base;
@@ -393,7 +394,7 @@ static void pxa_gpio_demux_handler(unsigned int irq, struct irq_desc *desc)
 			while (n < BITS_PER_LONG) {
 				loop = 1;
 
-				generic_handle_irq(gpio_to_irq(gpio_base + n));
+				ipipe_handle_demuxed_irq(gpio_to_irq(gpio_base + n));
 				n = find_next_bit(&gedr, BITS_PER_LONG, n + 1);
 			}
 		}
