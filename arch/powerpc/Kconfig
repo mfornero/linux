@@ -111,6 +111,7 @@ config PPC
 	select HAVE_MEMBLOCK_NODE_MAP
 	select HAVE_DMA_ATTRS
 	select HAVE_DMA_API_DEBUG
+ 	select HAVE_FUNCTION_TRACE_MCOUNT_TEST
 	select USE_GENERIC_SMP_HELPERS if SMP
 	select HAVE_OPROFILE
 	select HAVE_SYSCALL_WRAPPERS if PPC64
@@ -152,6 +153,9 @@ config SYSVIPC_COMPAT
 	bool
 	depends on COMPAT && SYSVIPC
 	default y
+
+config IRQSTACKS
+        def_bool !(PPC64 && IPIPE && PPC_BOOK3S)
 
 # All PPC32s use generic nvram driver through ppc_md
 config GENERIC_NVRAM
@@ -272,6 +276,13 @@ source "arch/powerpc/sysdev/Kconfig"
 source "arch/powerpc/platforms/Kconfig"
 
 menu "Kernel options"
+
+source "kernel/ipipe/Kconfig"
+
+config IPIPE_HAVE_PREEMPTIBLE_SWITCH
+       bool
+       depends on IPIPE
+       default y
 
 config HIGHMEM
 	bool "High memory support"

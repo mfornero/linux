@@ -2,7 +2,6 @@
 #define _ASM_POWERPC_ELF_H
 
 #ifdef __KERNEL__
-#include <linux/sched.h>	/* for task_struct */
 #include <asm/page.h>
 #include <asm/string.h>
 #endif
@@ -12,6 +11,8 @@
 #include <asm/ptrace.h>
 #include <asm/cputable.h>
 #include <asm/auxvec.h>
+
+struct mm_struct;
 
 /* PowerPC relocations defined by the ABIs */
 #define R_PPC_NONE		0

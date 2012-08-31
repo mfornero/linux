@@ -483,8 +483,13 @@ machine_check_common:
 	bl	.machine_check_exception
 	b	.ret_from_except
 
+#ifdef CONFIG_IPIPE
+	IPIPE_EXCEPTION_COMMON_ASYNC(0x500, hardware_interrupt, .__ipipe_grab_irq)
+	IPIPE_EXCEPTION_COMMON_ASYNC(0x900, decrementer, .__ipipe_grab_timer)
+#else /* !CONFIG_IPIPE */
 	STD_EXCEPTION_COMMON_ASYNC(0x500, hardware_interrupt, do_IRQ)
 	STD_EXCEPTION_COMMON_ASYNC(0x900, decrementer, .timer_interrupt)
+#endif
 	STD_EXCEPTION_COMMON(0xa00, trap_0a, .unknown_exception)
 	STD_EXCEPTION_COMMON(0xb00, trap_0b, .unknown_exception)
 	STD_EXCEPTION_COMMON(0xd00, single_step, .single_step_exception)

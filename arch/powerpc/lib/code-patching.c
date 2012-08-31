@@ -15,17 +15,20 @@
 #include <asm/code-patching.h>
 
 
+notrace
 void patch_instruction(unsigned int *addr, unsigned int instr)
 {
 	*addr = instr;
 	asm ("dcbst 0, %0; sync; icbi 0,%0; sync; isync" : : "r" (addr));
 }
 
+notrace
 void patch_branch(unsigned int *addr, unsigned long target, int flags)
 {
 	patch_instruction(addr, create_branch(addr, target, flags));
 }
 
+notrace
 unsigned int create_branch(const unsigned int *addr,
 			   unsigned long target, int flags)
 {
@@ -46,6 +49,7 @@ unsigned int create_branch(const unsigned int *addr,
 	return instruction;
 }
 
+notrace
 unsigned int create_cond_branch(const unsigned int *addr,
 				unsigned long target, int flags)
 {
@@ -66,21 +70,25 @@ unsigned int create_cond_branch(const unsigned int *addr,
 	return instruction;
 }
 
+notrace
 static unsigned int branch_opcode(unsigned int instr)
 {
 	return (instr >> 26) & 0x3F;
 }
 
+notrace
 static int instr_is_branch_iform(unsigned int instr)
 {
 	return branch_opcode(instr) == 18;
 }
 
+notrace
 static int instr_is_branch_bform(unsigned int instr)
 {
 	return branch_opcode(instr) == 16;
 }
 
+notrace
 int instr_is_relative_branch(unsigned int instr)
 {
 	if (instr & BRANCH_ABSOLUTE)
@@ -89,6 +97,7 @@ int instr_is_relative_branch(unsigned int instr)
 	return instr_is_branch_iform(instr) || instr_is_branch_bform(instr);
 }
 
+notrace
 static unsigned long branch_iform_target(const unsigned int *instr)
 {
 	signed long imm;
@@ -105,6 +114,7 @@ static unsigned long branch_iform_target(const unsigned int *instr)
 	return (unsigned long)imm;
 }
 
+notrace
 static unsigned long branch_bform_target(const unsigned int *instr)
 {
 	signed long imm;
@@ -121,6 +131,7 @@ static unsigned long branch_bform_target(const unsigned int *instr)
 	return (unsigned long)imm;
 }
 
+notrace
 unsigned long branch_target(const unsigned int *instr)
 {
 	if (instr_is_branch_iform(*instr))
@@ -131,6 +142,7 @@ unsigned long branch_target(const unsigned int *instr)
 	return 0;
 }
 
+notrace
 int instr_is_branch_to_addr(const unsigned int *instr, unsigned long addr)
 {
 	if (instr_is_branch_iform(*instr) || instr_is_branch_bform(*instr))
@@ -139,6 +151,7 @@ int instr_is_branch_to_addr(const unsigned int *instr, unsigned long addr)
 	return 0;
 }
 
+notrace
 unsigned int translate_branch(const unsigned int *dest, const unsigned int *src)
 {
 	unsigned long target;

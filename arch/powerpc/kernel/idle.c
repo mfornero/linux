@@ -65,6 +65,7 @@ void cpu_idle(void)
 
 		while (!need_resched() && !cpu_should_die()) {
 			ppc64_runlatch_off();
+			__ipipe_idle();
 
 			if (ppc_md.power_save) {
 				clear_thread_flag(TIF_POLLING_NRFLAG);
@@ -73,7 +74,7 @@ void cpu_idle(void)
 				 * is ordered w.r.t. need_resched() test.
 				 */
 				smp_mb();
-				local_irq_disable();
+				hard_local_irq_disable();
 
 				/* Don't trace irqs off for idle */
 				stop_critical_timings();
@@ -87,8 +88,7 @@ void cpu_idle(void)
 				/* Some power_save functions return with
 				 * interrupts enabled, some don't.
 				 */
-				if (irqs_disabled())
-					local_irq_enable();
+				hard_local_irq_enable();
 				set_thread_flag(TIF_POLLING_NRFLAG);
 
 			} else {

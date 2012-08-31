@@ -44,6 +44,7 @@ extern unsigned int debug_smp_processor_id(void); /* from linux/smp.h */
 
 struct task_struct;
 struct opal_machine_check_event;
+struct ipipe_percpu_domain_data;
 
 /*
  * Defines the layout of the paca.
@@ -136,6 +137,9 @@ struct paca_struct {
 	u8 io_sync;			/* writel() needs spin_unlock sync */
 	u8 irq_work_pending;		/* IRQ_WORK interrupt while soft-disable */
 	u8 nap_state_lost;		/* NV GPR values lost in power7_idle */
+#ifdef CONFIG_IPIPE
+	struct ipipe_percpu_domain_data *root_context;	/* Address of root context data */
+#endif /* CONFIG_IPIPE */
 
 #ifdef CONFIG_PPC_POWERNV
 	/* Pointer to OPAL machine check event structure set by the
