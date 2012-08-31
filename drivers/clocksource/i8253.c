@@ -20,6 +20,7 @@
  */
 IPIPE_DEFINE_RAW_SPINLOCK(i8253_lock);
 EXPORT_SYMBOL(i8253_lock);
+static unsigned periodic_pit_ch0;
 
 #ifdef CONFIG_CLKSRC_I8253
 /*
@@ -35,11 +36,9 @@ static cycle_t i8253_read(struct clocksource *cs)
 	int count;
 	u32 jifs;
 
-#ifdef CONFIG_IPIPE
-	if (ipipe_root_domain != ipipe_head_domain)
-		/* We don't really own the PIT. */
-		return (cycle_t)(jiffies * LATCH) + (LATCH - 1) - old_count;
-#endif /* CONFIG_IPIPE */
+	if (periodic_pit_ch0 == 0)
+		/* The PIT is not running in periodic mode. */
+		return jiffies * PIT_LATCH + (PIT_LATCH - 1) - old_count;
 
 	raw_spin_lock_irqsave(&i8253_lock, flags);
 	/*
@@ -101,8 +100,37 @@ static struct clocksource i8253_cs = {
 	.mask		= CLOCKSOURCE_MASK(32),
 };
 
+#ifdef CONFIG_IPIPE
+
+#define IPIPE_PIT_COUNT2LATCH 0xfffe
+
+extern cycle_t __ipipe_get_8253_tsc(struct clocksource *cs);
+
+int __ipipe_last_8253_counter2;
+
+void ipipe_setup_8253_tsc(void)
+{
+	unsigned long flags;
+
+	raw_spin_lock_irqsave(&i8253_lock, flags);
+	outb_p(0xb4, PIT_MODE);
+	outb_p(IPIPE_PIT_COUNT2LATCH & 0xff, PIT_CH2);
+	outb_p(IPIPE_PIT_COUNT2LATCH >> 8, PIT_CH2);
+	/* Gate high, disable speaker */
+	outb_p((inb_p(0x61) & ~0x2) | 1, 0x61);
+
+	raw_spin_unlock_irqrestore(&i8253_lock, flags);
+
+	i8253_cs.ipipe_read = __ipipe_get_8253_tsc;
+}
+#else /* !CONFIG_IPIPE */
+#define ipipe_setup_8253_tsc()	do { } while(0)
+#endif /* !CONFIG_IPIPE */
+
 int __init clocksource_i8253_init(void)
 {
+	if (cpu_has_tsc == 0)
+		ipipe_setup_8253_tsc();
 	return clocksource_register_hz(&i8253_cs, PIT_TICK_RATE);
 }
 #endif
@@ -118,8 +146,10 @@ static void init_pit_timer(enum clock_event_mode mode,
 {
 	raw_spin_lock(&i8253_lock);
 
+	periodic_pit_ch0 = 0;
 	switch (mode) {
 	case CLOCK_EVT_MODE_PERIODIC:
+		periodic_pit_ch0 = 1;
 		/* binary, mode 2, LSB/MSB, ch 0 */
 		outb_p(0x34, PIT_MODE);
 		outb_p(PIT_LATCH & 0xff , PIT_CH0);	/* LSB */

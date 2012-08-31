@@ -8,6 +8,7 @@ config 64BIT
 
 config X86_32
 	def_bool !64BIT
+	select IPIPE_WANT_CLOCKSOURCE if IPIPE
 	select CLKSRC_I8253
 
 config X86_64
