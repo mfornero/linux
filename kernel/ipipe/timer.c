@@ -354,7 +354,7 @@ void ipipe_timer_set(unsigned long cdelay)
 		cdelay = UINT_MAX;
 
 	tdelay = cdelay;
-	if (t->c2t_integ > 1)
+	if (t->c2t_integ != 1)
 		tdelay *= t->c2t_integ;
 	if (t->c2t_frac)
 		tdelay += ((unsigned long long)cdelay * t->c2t_frac) >> 32;
