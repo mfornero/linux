@@ -760,6 +760,8 @@ void update_vsyscall(struct timespec *wall_time, struct timespec *wtm,
 	vdso_data->stamp_sec_fraction = frac_sec;
 	smp_wmb();
 	++(vdso_data->tb_update_count);
+
+	ipipe_update_hostrt(wall_time, wtm, clock, mult);
 }
 
 void update_vsyscall_tz(void)
