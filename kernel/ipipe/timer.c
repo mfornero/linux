@@ -360,7 +360,7 @@ void ipipe_timer_set(unsigned long cdelay)
 		tdelay += ((unsigned long long)cdelay * t->c2t_frac) >> 32;
 
 	if (tdelay < t->min_delay_ticks
-	    || t->set(tdelay, t) < 0)
+	    || t->set(tdelay, t->timer_set) < 0)
 		ipipe_raise_irq(t->irq);
 }
 EXPORT_SYMBOL_GPL(ipipe_timer_set);
