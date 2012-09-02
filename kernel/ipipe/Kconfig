@@ -8,6 +8,29 @@ config IPIPE
 config IPIPE_CORE
 	def_bool y
 
+config IPIPE_CORE_APIREV
+       int
+       depends on IPIPE
+       default 2
+	---help---
+	  The API revision level we implement.
+
+config IPIPE_WANT_APIREV_1
+       bool
+
+config IPIPE_WANT_APIREV_2
+       bool
+
+config IPIPE_TARGET_APIREV
+       int
+       default 1 if IPIPE_WANT_APIREV_1
+       default 2 if IPIPE_WANT_APIREV_2
+       default 1 if IPIPE_LEGACY
+       default IPIPE_CORE_APIREV
+	---help---
+	  The API revision level the we want (must be <=
+	  IPIPE_CORE_APIREV).
+
 config IPIPE_LEGACY
 	bool "I-pipe legacy interface"
 	depends on IPIPE

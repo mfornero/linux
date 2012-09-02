@@ -29,7 +29,7 @@ struct irq_desc;
 
 #ifdef CONFIG_IPIPE
 
-#define IPIPE_CORE_APIREV  2
+#define IPIPE_CORE_APIREV  CONFIG_IPIPE_CORE_APIREV
 
 #ifdef CONFIG_IPIPE_DEBUG_CONTEXT
 void ipipe_root_only(void);
