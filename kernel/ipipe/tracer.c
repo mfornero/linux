@@ -2,7 +2,7 @@
  * kernel/ipipe/tracer.c
  *
  * Copyright (C) 2005 Luotao Fu.
- *               2005-2008 Jan Kiszka.
+ *		 2005-2008 Jan Kiszka.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,30 +35,30 @@
 #include <linux/ftrace.h>
 #include <asm/uaccess.h>
 
-#define IPIPE_TRACE_PATHS           4 /* <!> Do not lower below 3 */
-#define IPIPE_DEFAULT_ACTIVE        0
-#define IPIPE_DEFAULT_MAX           1
-#define IPIPE_DEFAULT_FROZEN        2
+#define IPIPE_TRACE_PATHS	    4 /* <!> Do not lower below 3 */
+#define IPIPE_DEFAULT_ACTIVE	    0
+#define IPIPE_DEFAULT_MAX	    1
+#define IPIPE_DEFAULT_FROZEN	    2
 
-#define IPIPE_TRACE_POINTS          (1 << CONFIG_IPIPE_TRACE_SHIFT)
-#define WRAP_POINT_NO(point)        ((point) & (IPIPE_TRACE_POINTS-1))
+#define IPIPE_TRACE_POINTS	    (1 << CONFIG_IPIPE_TRACE_SHIFT)
+#define WRAP_POINT_NO(point)	    ((point) & (IPIPE_TRACE_POINTS-1))
 
-#define IPIPE_DEFAULT_PRE_TRACE     10
+#define IPIPE_DEFAULT_PRE_TRACE	    10
 #define IPIPE_DEFAULT_POST_TRACE    10
 #define IPIPE_DEFAULT_BACK_TRACE    100
 
-#define IPIPE_DELAY_NOTE            1000  /* in nanoseconds */
-#define IPIPE_DELAY_WARN            10000 /* in nanoseconds */
+#define IPIPE_DELAY_NOTE	    1000  /* in nanoseconds */
+#define IPIPE_DELAY_WARN	    10000 /* in nanoseconds */
 
-#define IPIPE_TFLG_NMI_LOCK         0x0001
-#define IPIPE_TFLG_NMI_HIT          0x0002
+#define IPIPE_TFLG_NMI_LOCK	    0x0001
+#define IPIPE_TFLG_NMI_HIT	    0x0002
 #define IPIPE_TFLG_NMI_FREEZE_REQ   0x0004
 
-#define IPIPE_TFLG_HWIRQ_OFF        0x0100
-#define IPIPE_TFLG_FREEZING         0x0200
-#define IPIPE_TFLG_CURRDOM_SHIFT    10   /* bits 10..11: current domain */
-#define IPIPE_TFLG_CURRDOM_MASK     0x0C00
-#define IPIPE_TFLG_DOMSTATE_SHIFT   12   /* bits 12..15: domain stalled? */
+#define IPIPE_TFLG_HWIRQ_OFF	    0x0100
+#define IPIPE_TFLG_FREEZING	    0x0200
+#define IPIPE_TFLG_CURRDOM_SHIFT    10	 /* bits 10..11: current domain */
+#define IPIPE_TFLG_CURRDOM_MASK	    0x0C00
+#define IPIPE_TFLG_DOMSTATE_SHIFT   12	 /* bits 12..15: domain stalled? */
 #define IPIPE_TFLG_DOMSTATE_BITS    3
 
 #define IPIPE_TFLG_DOMAIN_STALLED(point, n) \
@@ -99,8 +99,8 @@ enum ipipe_trace_type
 	IPIPE_TRACE_EVENT,
 };
 
-#define IPIPE_TYPE_MASK             0x0007
-#define IPIPE_TYPE_BITS             3
+#define IPIPE_TYPE_MASK		    0x0007
+#define IPIPE_TYPE_BITS		    3
 
 #ifdef CONFIG_IPIPE_TRACE_VMALLOC
 static DEFINE_PER_CPU(struct ipipe_trace_path *, trace_path);
@@ -166,15 +166,15 @@ static notrace int __ipipe_get_free_trace_path(int old, int cpu)
 			new_active = 0;
 		tp = &per_cpu(trace_path, cpu)[new_active];
 	} while (new_active == per_cpu(max_path, cpu) ||
-	         new_active == per_cpu(frozen_path, cpu) ||
-	         tp->dump_lock);
+		 new_active == per_cpu(frozen_path, cpu) ||
+		 tp->dump_lock);
 
 	return new_active;
 }
 
 static notrace void
 __ipipe_migrate_pre_trace(struct ipipe_trace_path *new_tp,
-                          struct ipipe_trace_path *old_tp, int old_pos)
+			  struct ipipe_trace_path *old_tp, int old_pos)
 {
 	int i;
 
@@ -198,7 +198,7 @@ __ipipe_trace_end(int cpu, struct ipipe_trace_path *tp, int pos)
 
 	/* do we have a new worst case? */
 	length = tp->point[tp->end].timestamp -
-	         tp->point[tp->begin].timestamp;
+		 tp->point[tp->begin].timestamp;
 	if (length > per_cpu(trace_path, cpu)[per_cpu(max_path, cpu)].length) {
 		/* we need protection here against other cpus trying
 		   to start a proc dump */
@@ -260,7 +260,7 @@ __ipipe_trace_freeze(int cpu, struct ipipe_trace_path *tp, int pos)
 
 void notrace
 __ipipe_trace(enum ipipe_trace_type type, unsigned long eip,
-              unsigned long parent_eip, unsigned long v)
+	      unsigned long parent_eip, unsigned long v)
 {
 	struct ipipe_trace_path *tp, *old_tp;
 	int pos, next_pos, begin;
@@ -294,8 +294,8 @@ __ipipe_trace(enum ipipe_trace_type type, unsigned long eip,
 
 	/* clear NMI events and set lock (atomically per cpu) */
 	tp->flags = (tp->flags & ~(IPIPE_TFLG_NMI_HIT |
-	                           IPIPE_TFLG_NMI_FREEZE_REQ))
-	                       | IPIPE_TFLG_NMI_LOCK;
+				   IPIPE_TFLG_NMI_FREEZE_REQ))
+			       | IPIPE_TFLG_NMI_LOCK;
 
 	/* check active_path again - some nasty NMI may have switched
 	 * it meanwhile */
@@ -357,8 +357,8 @@ __ipipe_trace(enum ipipe_trace_type type, unsigned long eip,
 	 *  a) that phase is over now or
 	 *  b) a new TRACE_BEGIN came in but we are not freezing this path */
 	if (unlikely((tp->post_trace > 0) && ((--tp->post_trace == 0) ||
-	             ((type == IPIPE_TRACE_BEGIN) &&
-	              !(tp->flags & IPIPE_TFLG_FREEZING))))) {
+		     ((type == IPIPE_TRACE_BEGIN) &&
+		      !(tp->flags & IPIPE_TFLG_FREEZING))))) {
 		/* store the path's end (i.e. excluding post-trace) */
 		tp->end = WRAP_POINT_NO(pos - post_trace + tp->post_trace);
 
@@ -390,8 +390,8 @@ __ipipe_trace(enum ipipe_trace_type type, unsigned long eip,
 		/* handle deferred freezing from NMI context */
 		if (old_tp->flags & IPIPE_TFLG_NMI_FREEZE_REQ)
 			__ipipe_trace(IPIPE_TRACE_FREEZE, old_tp->nmi_saved_eip,
-			              old_tp->nmi_saved_parent_eip,
-			              old_tp->nmi_saved_v);
+				      old_tp->nmi_saved_parent_eip,
+				      old_tp->nmi_saved_v);
 	}
 
 	hard_local_irq_restore_notrace(flags);
@@ -413,8 +413,8 @@ static unsigned long __ipipe_global_path_lock(void)
 
 	/* clear NMI events and set lock (atomically per cpu) */
 	tp->flags = (tp->flags & ~(IPIPE_TFLG_NMI_HIT |
-	                           IPIPE_TFLG_NMI_FREEZE_REQ))
-	                       | IPIPE_TFLG_NMI_LOCK;
+				   IPIPE_TFLG_NMI_FREEZE_REQ))
+			       | IPIPE_TFLG_NMI_LOCK;
 
 	/* check active_path again - some nasty NMI may have switched
 	 * it meanwhile */
@@ -446,7 +446,7 @@ static void __ipipe_global_path_unlock(unsigned long flags)
 	/* handle deferred freezing from NMI context */
 	if (tp->flags & IPIPE_TFLG_NMI_FREEZE_REQ)
 		__ipipe_trace(IPIPE_TRACE_FREEZE, tp->nmi_saved_eip,
-		              tp->nmi_saved_parent_eip, tp->nmi_saved_v);
+			      tp->nmi_saved_parent_eip, tp->nmi_saved_v);
 
 	/* See __ipipe_spin_lock_irqsave() and friends. */
 	__ipipe_spin_unlock_irqcomplete(flags);
@@ -457,7 +457,7 @@ void notrace ipipe_trace_begin(unsigned long v)
 	if (!ipipe_trace_enable)
 		return;
 	__ipipe_trace(IPIPE_TRACE_BEGIN, __BUILTIN_RETURN_ADDRESS0,
-	              __BUILTIN_RETURN_ADDRESS1, v);
+		      __BUILTIN_RETURN_ADDRESS1, v);
 }
 EXPORT_SYMBOL_GPL(ipipe_trace_begin);
 
@@ -466,7 +466,7 @@ void notrace ipipe_trace_end(unsigned long v)
 	if (!ipipe_trace_enable)
 		return;
 	__ipipe_trace(IPIPE_TRACE_END, __BUILTIN_RETURN_ADDRESS0,
-	              __BUILTIN_RETURN_ADDRESS1, v);
+		      __BUILTIN_RETURN_ADDRESS1, v);
 }
 EXPORT_SYMBOL_GPL(ipipe_trace_end);
 
@@ -475,7 +475,7 @@ void notrace ipipe_trace_freeze(unsigned long v)
 	if (!ipipe_trace_enable)
 		return;
 	__ipipe_trace(IPIPE_TRACE_FREEZE, __BUILTIN_RETURN_ADDRESS0,
-	              __BUILTIN_RETURN_ADDRESS1, v);
+		      __BUILTIN_RETURN_ADDRESS1, v);
 }
 EXPORT_SYMBOL_GPL(ipipe_trace_freeze);
 
@@ -484,8 +484,8 @@ void notrace ipipe_trace_special(unsigned char id, unsigned long v)
 	if (!ipipe_trace_enable)
 		return;
 	__ipipe_trace(IPIPE_TRACE_SPECIAL | (id << IPIPE_TYPE_BITS),
-	              __BUILTIN_RETURN_ADDRESS0,
-	              __BUILTIN_RETURN_ADDRESS1, v);
+		      __BUILTIN_RETURN_ADDRESS0,
+		      __BUILTIN_RETURN_ADDRESS1, v);
 }
 EXPORT_SYMBOL_GPL(ipipe_trace_special);
 
@@ -494,8 +494,8 @@ void notrace ipipe_trace_pid(pid_t pid, short prio)
 	if (!ipipe_trace_enable)
 		return;
 	__ipipe_trace(IPIPE_TRACE_PID | (prio << IPIPE_TYPE_BITS),
-	              __BUILTIN_RETURN_ADDRESS0,
-	              __BUILTIN_RETURN_ADDRESS1, pid);
+		      __BUILTIN_RETURN_ADDRESS0,
+		      __BUILTIN_RETURN_ADDRESS1, pid);
 }
 EXPORT_SYMBOL_GPL(ipipe_trace_pid);
 
@@ -504,8 +504,8 @@ void notrace ipipe_trace_event(unsigned char id, unsigned long delay_tsc)
 	if (!ipipe_trace_enable)
 		return;
 	__ipipe_trace(IPIPE_TRACE_EVENT | (id << IPIPE_TYPE_BITS),
-	              __BUILTIN_RETURN_ADDRESS0,
-	              __BUILTIN_RETURN_ADDRESS1, delay_tsc);
+		      __BUILTIN_RETURN_ADDRESS0,
+		      __BUILTIN_RETURN_ADDRESS1, delay_tsc);
 }
 EXPORT_SYMBOL_GPL(ipipe_trace_event);
 
@@ -526,10 +526,10 @@ int ipipe_trace_max_reset(void)
 			break;
 		}
 
-		path->begin     = -1;
-		path->end       = -1;
+		path->begin	= -1;
+		path->end	= -1;
 		path->trace_pos = 0;
-		path->length    = 0;
+		path->length	= 0;
 	}
 
 	__ipipe_global_path_unlock(flags);
@@ -558,7 +558,7 @@ int ipipe_trace_frozen_reset(void)
 		path->begin = -1;
 		path->end = -1;
 		path->trace_pos = 0;
-		path->length    = 0;
+		path->length	= 0;
 	}
 
 	__ipipe_global_path_unlock(flags);
@@ -569,7 +569,7 @@ EXPORT_SYMBOL_GPL(ipipe_trace_frozen_reset);
 
 static void
 __ipipe_get_task_info(char *task_info, struct ipipe_trace_point *point,
-                      int trylock)
+		      int trylock)
 {
 	struct task_struct *task = NULL;
 	char buf[8];
@@ -682,7 +682,7 @@ void ipipe_trace_panic_dump(void)
 
 			switch (point->type & IPIPE_TYPE_MASK) {
 				case IPIPE_TRACE_FUNC:
-					printk("           ");
+					printk("	   ");
 					break;
 
 				case IPIPE_TRACE_PID:
@@ -725,24 +725,24 @@ EXPORT_SYMBOL_GPL(ipipe_trace_panic_dump);
 static notrace int __ipipe_in_critical_trpath(long point_no)
 {
 	return ((WRAP_POINT_NO(point_no-print_path->begin) <
-	         WRAP_POINT_NO(print_path->end-print_path->begin)) ||
-	        ((print_path->end == print_path->begin) &&
-	         (WRAP_POINT_NO(point_no-print_path->end) >
-	          print_post_trace)));
+		 WRAP_POINT_NO(print_path->end-print_path->begin)) ||
+		((print_path->end == print_path->begin) &&
+		 (WRAP_POINT_NO(point_no-print_path->end) >
+		  print_post_trace)));
 }
 
 static long __ipipe_signed_tsc2us(long long tsc)
 {
-        unsigned long long abs_tsc;
-        long us;
+	unsigned long long abs_tsc;
+	long us;
 
 	/* ipipe_tsc2us works on unsigned => handle sign separately */
-        abs_tsc = (tsc >= 0) ? tsc : -tsc;
-        us = ipipe_tsc2us(abs_tsc);
-        if (tsc < 0)
-                return -us;
-        else
-                return us;
+	abs_tsc = (tsc >= 0) ? tsc : -tsc;
+	us = ipipe_tsc2us(abs_tsc);
+	if (tsc < 0)
+		return -us;
+	else
+		return us;
 }
 
 static void
@@ -766,7 +766,7 @@ __ipipe_trace_point_type(char *buf, struct ipipe_trace_point *point)
 			break;
 
 		case IPIPE_TRACE_SPECIAL:
-			sprintf(buf, "(0x%02x)  ",
+			sprintf(buf, "(0x%02x)	",
 				point->type >> IPIPE_TYPE_BITS);
 			break;
 
@@ -794,7 +794,7 @@ __ipipe_print_pathmark(struct seq_file *m, struct ipipe_trace_point *point)
 	else if (__ipipe_in_critical_trpath(point_no))
 		mark = ':';
 	seq_printf(m, "%c%c", mark,
-	           (point->flags & IPIPE_TFLG_HWIRQ_OFF) ? '|' : ' ');
+		   (point->flags & IPIPE_TFLG_HWIRQ_OFF) ? '|' : ' ');
 
 	if (!verbose_trace)
 		return;
@@ -812,13 +812,13 @@ __ipipe_print_delay(struct seq_file *m, struct ipipe_trace_point *point)
 {
 	unsigned long delay = 0;
 	int next;
-	char *mark = "  ";
+	char *mark = "	";
 
 	next = WRAP_POINT_NO(point+1 - print_path->point);
 
 	if (next != print_path->trace_pos)
 		delay = ipipe_tsc2ns(print_path->point[next].timestamp -
-		                     point->timestamp);
+				     point->timestamp);
 
 	if (__ipipe_in_critical_trpath(point - print_path->point)) {
 		if (delay > IPIPE_DELAY_WARN)
@@ -830,7 +830,7 @@ __ipipe_print_delay(struct seq_file *m, struct ipipe_trace_point *point)
 
 	if (verbose_trace)
 		seq_printf(m, "%3lu.%03lu%c ", delay/1000, delay%1000,
-		           (point->flags & IPIPE_TFLG_NMI_HIT) ? 'N' : ' ');
+			   (point->flags & IPIPE_TFLG_NMI_HIT) ? 'N' : ' ');
 	else
 		seq_puts(m, " ");
 }
@@ -883,28 +883,28 @@ static void __ipipe_print_headline(struct seq_file *m)
 			name[1] = "<unused>";
 
 		seq_printf(m,
-		           " +----- Hard IRQs ('|': locked)\n"
-		           " |+-- %s\n"
-		           " ||+- %s%s\n"
-		           " |||                          +---------- "
-		               "Delay flag ('+': > %d us, '!': > %d us)\n"
-		           " |||                          |        +- "
-		               "NMI noise ('N')\n"
-		           " |||                          |        |\n"
-		           "      Type    User Val.   Time    Delay  Function "
-		               "(Parent)\n",
-		           name[1], name[0],
-		           " ('*': domain stalled, '+': current, "
+			   " +----- Hard IRQs ('|': locked)\n"
+			   " |+-- %s\n"
+			   " ||+- %s%s\n"
+			   " |||			  +---------- "
+			       "Delay flag ('+': > %d us, '!': > %d us)\n"
+			   " |||			  |	   +- "
+			       "NMI noise ('N')\n"
+			   " |||			  |	   |\n"
+			   "	  Type	  User Val.   Time    Delay  Function "
+			       "(Parent)\n",
+			   name[1], name[0],
+			   " ('*': domain stalled, '+': current, "
 			   "'#': current+stalled)",
-		           IPIPE_DELAY_NOTE/1000, IPIPE_DELAY_WARN/1000);
+			   IPIPE_DELAY_NOTE/1000, IPIPE_DELAY_WARN/1000);
 	} else
 		seq_printf(m,
-		           " +--------------- Hard IRQs ('|': locked)\n"
-		           " |             +- Delay flag "
-		               "('+': > %d us, '!': > %d us)\n"
-		           " |             |\n"
-		           "  Type     Time   Function (Parent)\n",
-		           IPIPE_DELAY_NOTE/1000, IPIPE_DELAY_WARN/1000);
+			   " +--------------- Hard IRQs ('|': locked)\n"
+			   " |		   +- Delay flag "
+			       "('+': > %d us, '!': > %d us)\n"
+			   " |		   |\n"
+			   "  Type     Time   Function (Parent)\n",
+			   IPIPE_DELAY_NOTE/1000, IPIPE_DELAY_WARN/1000);
 }
 
 static void *__ipipe_max_prtrace_start(struct seq_file *m, loff_t *pos)
@@ -948,9 +948,9 @@ static void *__ipipe_max_prtrace_start(struct seq_file *m, loff_t *pos)
 		/* pre- and post-tracing length, post-trace length was frozen
 		   in __ipipe_trace, pre-trace may have to be reduced due to
 		   buffer overrun */
-		print_pre_trace  = pre_trace;
+		print_pre_trace	 = pre_trace;
 		print_post_trace = WRAP_POINT_NO(print_path->trace_pos -
-		                                 print_path->end - 1);
+						 print_path->end - 1);
 		if (points+pre_trace+print_post_trace > IPIPE_TRACE_POINTS - 1)
 			print_pre_trace = IPIPE_TRACE_POINTS - 1 - points -
 				print_post_trace;
@@ -968,12 +968,12 @@ static void *__ipipe_max_prtrace_start(struct seq_file *m, loff_t *pos)
 
 	/* check if we are inside the trace range */
 	if (n >= WRAP_POINT_NO(print_path->end - print_path->begin + 1 +
-	                       print_pre_trace + print_post_trace))
+			       print_pre_trace + print_post_trace))
 		return NULL;
 
 	/* return the next point to be shown */
 	return &print_path->point[WRAP_POINT_NO(print_path->begin -
-	                                        print_pre_trace + n)];
+						print_pre_trace + n)];
 }
 
 static void *__ipipe_prtrace_next(struct seq_file *m, void *p, loff_t *pos)
@@ -982,12 +982,12 @@ static void *__ipipe_prtrace_next(struct seq_file *m, void *p, loff_t *pos)
 
 	/* check if we are inside the trace range with the next entry */
 	if (n >= WRAP_POINT_NO(print_path->end - print_path->begin + 1 +
-	                       print_pre_trace + print_post_trace))
+			       print_pre_trace + print_post_trace))
 		return NULL;
 
 	/* return the next point to be shown */
 	return &print_path->point[WRAP_POINT_NO(print_path->begin -
-	                                        print_pre_trace + *pos)];
+						print_pre_trace + *pos)];
 }
 
 static void __ipipe_prtrace_stop(struct seq_file *m, void *p)
@@ -1014,7 +1014,7 @@ static int __ipipe_prtrace_show(struct seq_file *m, void *p)
 	if (verbose_trace)
 		switch (point->type & IPIPE_TYPE_MASK) {
 			case IPIPE_TRACE_FUNC:
-				seq_puts(m, "           ");
+				seq_puts(m, "		");
 				break;
 
 			case IPIPE_TRACE_PID:
@@ -1058,7 +1058,7 @@ static int __ipipe_max_prtrace_open(struct inode *inode, struct file *file)
 
 static ssize_t
 __ipipe_max_reset(struct file *file, const char __user *pbuffer,
-                  size_t count, loff_t *data)
+		  size_t count, loff_t *data)
 {
 	mutex_lock(&out_mutex);
 	ipipe_trace_max_reset();
@@ -1068,10 +1068,10 @@ __ipipe_max_reset(struct file *file, const char __user *pbuffer,
 }
 
 struct file_operations __ipipe_max_prtrace_fops = {
-	.open       = __ipipe_max_prtrace_open,
-	.read       = seq_read,
-	.write      = __ipipe_max_reset,
-	.llseek     = seq_lseek,
+	.open	    = __ipipe_max_prtrace_open,
+	.read	    = seq_read,
+	.write	    = __ipipe_max_reset,
+	.llseek	    = seq_lseek,
 	.release    = seq_release,
 };
 
@@ -1111,9 +1111,9 @@ static void *__ipipe_frozen_prtrace_start(struct seq_file *m, loff_t *pos)
 		/* back- and post-tracing length, post-trace length was frozen
 		   in __ipipe_trace, back-trace may have to be reduced due to
 		   buffer overrun */
-		print_pre_trace  = back_trace-1; /* substract freeze point */
+		print_pre_trace	 = back_trace-1; /* substract freeze point */
 		print_post_trace = WRAP_POINT_NO(print_path->trace_pos -
-		                                 print_path->end - 1);
+						 print_path->end - 1);
 		if (1+pre_trace+print_post_trace > IPIPE_TRACE_POINTS - 1)
 			print_pre_trace = IPIPE_TRACE_POINTS - 2 -
 				print_post_trace;
@@ -1133,7 +1133,7 @@ static void *__ipipe_frozen_prtrace_start(struct seq_file *m, loff_t *pos)
 
 	/* return the next point to be shown */
 	return &print_path->point[WRAP_POINT_NO(print_path->begin-
-	                                        print_pre_trace+n)];
+						print_pre_trace+n)];
 }
 
 static struct seq_operations __ipipe_frozen_ptrace_ops = {
@@ -1150,7 +1150,7 @@ static int __ipipe_frozen_prtrace_open(struct inode *inode, struct file *file)
 
 static ssize_t
 __ipipe_frozen_ctrl(struct file *file, const char __user *pbuffer,
-                    size_t count, loff_t *data)
+		    size_t count, loff_t *data)
 {
 	char *end, buf[16];
 	int val;
@@ -1177,15 +1177,15 @@ __ipipe_frozen_ctrl(struct file *file, const char __user *pbuffer,
 }
 
 struct file_operations __ipipe_frozen_prtrace_fops = {
-	.open       = __ipipe_frozen_prtrace_open,
-	.read       = seq_read,
-	.write      = __ipipe_frozen_ctrl,
-	.llseek     = seq_lseek,
+	.open	    = __ipipe_frozen_prtrace_open,
+	.read	    = seq_read,
+	.write	    = __ipipe_frozen_ctrl,
+	.llseek	    = seq_lseek,
 	.release    = seq_release,
 };
 
 static int __ipipe_rd_proc_val(char *page, char **start, off_t off,
-                               int count, int *eof, void *data)
+			       int count, int *eof, void *data)
 {
 	int len;
 
@@ -1203,7 +1203,7 @@ static int __ipipe_rd_proc_val(char *page, char **start, off_t off,
 }
 
 static int __ipipe_wr_proc_val(struct file *file, const char __user *buffer,
-                               unsigned long count, void *data)
+			       unsigned long count, void *data)
 {
 	char *end, buf[16];
 	int val;
@@ -1335,7 +1335,7 @@ extern struct proc_dir_entry *ipipe_proc_root;
 
 static struct proc_dir_entry * __init
 __ipipe_create_trace_proc_val(struct proc_dir_entry *trace_dir,
-                              const char *name, int *value_ptr)
+			      const char *name, int *value_ptr)
 {
 	struct proc_dir_entry *entry;
 
@@ -1417,13 +1417,13 @@ void __init __ipipe_init_tracer(void)
 	}
 
 	__ipipe_create_trace_proc_val(trace_dir, "pre_trace_points",
-	                              &pre_trace);
+				      &pre_trace);
 	__ipipe_create_trace_proc_val(trace_dir, "post_trace_points",
-	                              &post_trace);
+				      &post_trace);
 	__ipipe_create_trace_proc_val(trace_dir, "back_trace_points",
-	                              &back_trace);
+				      &back_trace);
 	__ipipe_create_trace_proc_val(trace_dir, "verbose",
-	                              &verbose_trace);
+				      &verbose_trace);
 	entry = __ipipe_create_trace_proc_val(trace_dir, "enable",
 					      &ipipe_trace_enable);
 #ifdef CONFIG_IPIPE_TRACE_MCOUNT
