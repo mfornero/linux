@@ -158,7 +158,7 @@ static void ipipe_timer_request_sync(void)
  * choose per-cpu timer: we walk the list, and find the timer with the
  * highest rating.
  */
-int ipipe_timers_request(const struct cpumask *mask)
+int ipipe_select_timers(const struct cpumask *mask)
 {
 	struct clock_event_device *evtdev;
 	unsigned hrclock_khz, hrtimer_khz;
