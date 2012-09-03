@@ -83,7 +83,7 @@ static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
 	hard_cond_local_irq_restore(flags);
 }
 
-#define ipipe_head_switch_mm(prev, next, tsk) \
+#define ipipe_switch_mm_head(prev, next, tsk) \
 	__switch_mm(prev, next, tsk)
 
 #define activate_mm(prev, next)			\
