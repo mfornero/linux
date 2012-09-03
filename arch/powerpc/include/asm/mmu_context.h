@@ -199,11 +199,11 @@ static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
 }
 
 /*
- * ipipe_head_switch_mm is reserved to the head domain for switching
+ * ipipe_switch_mm_head is reserved to the head domain for switching
  * mmu context.
  */
 static inline
-void ipipe_head_switch_mm(struct mm_struct *prev, struct mm_struct *next,
+void ipipe_switch_mm_head(struct mm_struct *prev, struct mm_struct *next,
 			  struct task_struct *tsk)
 {
 	__switch_mm_prepare(prev, next, tsk);
