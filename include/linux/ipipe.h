@@ -100,6 +100,14 @@ static inline struct mm_struct *ipipe_get_active_mm(void)
 
 #endif /* !CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH */
 
+#ifdef CONFIG_IPIPE_WANT_CLOCKSOURCE
+
+extern unsigned long long __ipipe_cs_freq;
+
+extern struct clocksource *__ipipe_cs;
+
+#endif /* CONFIG_IPIPE_WANT_CLOCKSOURCE */
+
 static inline void __ipipe_nmi_enter(void)
 {
 	__this_cpu_write(ipipe_percpu.nmi_state, __ipipe_root_status);

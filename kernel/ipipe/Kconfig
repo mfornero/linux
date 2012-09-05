@@ -8,6 +8,9 @@ config IPIPE
 config IPIPE_CORE
 	def_bool y
 
+config IPIPE_WANT_CLOCKSOURCE
+       bool
+
 config IPIPE_CORE_APIREV
        int
        depends on IPIPE
