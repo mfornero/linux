@@ -256,6 +256,8 @@ static inline int hard_irqs_disabled(void)
 	return native_irqs_disabled();
 }
 
+#define hard_irqs_disabled_flags(flags)	arch_irqs_disabled_flags(flags)
+
 #ifdef CONFIG_IPIPE_TRACE_IRQSOFF
 
 static inline void hard_local_irq_disable(void)
