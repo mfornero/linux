@@ -903,30 +903,32 @@ END(interrupt)
 
 /* 0(%rsp): ~(interrupt number) */
 	.macro interrupt func
-	/* reserve pt_regs for scratch regs and rbp */
+	/* Reserve pt_regs for scratch regs and rbp */
 	subq $ORIG_RAX-RBP, %rsp
 	CFI_ADJUST_CFA_OFFSET ORIG_RAX-RBP
 	SAVE_ARGS_IRQ
 #ifdef CONFIG_IPIPE_TRACE_IRQSOFF
-	pushq %rbp
-	leaq RIP-8(%rdi), %rbp	# make interrupted address show up in trace
-	pushq %rdi
-	movq ORIG_RAX(%rdi), %rdi	# IRQ number
+	/* pt_regs is %rdi (clobbered in the following) or %rsp + 8-RBP */
+	movq ORIG_RAX+8-RBP(%rsp), %rdi # IRQ number...
 	notq %rdi			# ...is inverted, fix up
+	leaq RIP-8+8-RBP(%rsp), %rbp    # Show interrupted address in trace
 	call ipipe_trace_begin
-	popq %rdi
-	popq %rbp
+
+	/* Restore original content of %rdi and %rbp for the interrupt handler */
+	leaq 8-RBP(%rsp), %rdi
+	movq RBP+8-RBP(%rsp), %rbp
 
 	call \func
 
-	pushq %rbp
-	pushq %rax
-	movq 8-ARGOFFSET+ORIG_RAX(%rbp), %rdi
-	leaq 8-ARGOFFSET+RIP-8(%rbp), %rbp
+	/* Show IRQ number and interrupted address in the trace, as before */
+	movq ORIG_RAX+8-RBP(%rsp), %rdi
 	notq %rdi
+	leaq RIP-8+8-RBP(%rsp), %rbp
+
+	pushq %rax
 	call ipipe_trace_end
 	popq %rax
-	popq %rbp
+	movq RBP+8-RBP(%rsp), %rbp
 #else
 	call \func
 #endif
