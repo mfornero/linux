@@ -113,13 +113,19 @@
 
 #ifdef CONFIG_IPIPE_TRACE_IRQSOFF
 # define IPIPE_TRACE_IRQ_ENTER \
-	lea PT_EIP-4(%esp), %ebp; \
 	movl PT_ORIG_EAX(%esp), %eax; \
-	call ipipe_trace_begin
+	lea PT_EIP-4(%esp), %ebp; \
+	cmp $0, %eax; \
+	jge 9998f; \
+	not %eax; \
+9998:	call ipipe_trace_begin
 # define IPIPE_TRACE_IRQ_EXIT \
 	pushl %eax; \
 	movl PT_ORIG_EAX+4(%esp), %eax; \
-	call ipipe_trace_end; \
+	cmp $0, %eax; \
+	jge 9999f; \
+	not %eax; \
+9999:	call ipipe_trace_end; \
 	popl %eax
 #else  /* !CONFIG_IPIPE_TRACE_IRQSOFF */
 #define IPIPE_TRACE_IRQ_ENTER
@@ -914,7 +920,7 @@ ENTRY(name)				\
 	BUILD_INTERRUPT(ipipe_reschedule_interrupt, IPIPE_RESCHEDULE_VECTOR)
 	BUILD_INTERRUPT(ipipe_critical_interrupt, IPIPE_CRITICAL_VECTOR)
 #endif
-	
+
 #else /* !CONFIG_IPIPE */
 /*
  * the CPU automatically disables interrupts when executing an IRQ vector,
