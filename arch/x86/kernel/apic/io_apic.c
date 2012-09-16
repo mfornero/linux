@@ -2595,13 +2595,13 @@ static void ack_apic_level(struct irq_data *data)
 	 */
 	i = cfg->vector;
 	v = apic_read(APIC_TMR + ((i & ~0x1f) >> 1));
-	raw_spin_lock(&ioapic_lock);
 	if (unlikely(!(v & (1 << (i & 0x1f))))) {
 		/* IO-APIC erratum: see comment above. */
 		atomic_inc(&irq_mis_count);
+		raw_spin_lock(&ioapic_lock);
 		__eoi_ioapic_irq(cfg);
+		raw_spin_unlock(&ioapic_lock);
 	}
-	raw_spin_unlock(&ioapic_lock);
 	__ack_APIC_irq();
 #endif /* CONFIG_IPIPE */
 }
