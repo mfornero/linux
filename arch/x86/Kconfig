@@ -17,6 +17,8 @@ config X86_64
 ### Arch settings
 config X86
 	def_bool y
+	select IPIPE_HAVE_HOSTRT if IPIPE
+	select IPIPE_HAVE_VM_NOTIFIER if IPIPE
 	select HAVE_AOUT if X86_32
 	select HAVE_UNSTABLE_SCHED_CLOCK
 	select HAVE_IDE
@@ -188,7 +190,7 @@ config ARCH_SUSPEND_POSSIBLE
 
 config ZONE_DMA32
 	bool
-	default X86_64
+	default X86_64 || IPIPE
 
 config AUDIT_ARCH
 	bool
@@ -549,6 +551,7 @@ config SCHED_OMIT_FRAME_POINTER
 
 menuconfig PARAVIRT_GUEST
 	bool "Paravirtualized guest support"
+	depends on !IPIPE
 	---help---
 	  Say Y here to get to see options related to running Linux under
 	  various hypervisors.  This option alone does not add any kernel code.
@@ -593,6 +596,7 @@ source "arch/x86/lguest/Kconfig"
 
 config PARAVIRT
 	bool "Enable paravirtualization code"
+	depends on !IPIPE
 	---help---
 	  This changes the kernel so it can modify itself when it is run
 	  under a hypervisor, potentially improving performance significantly
@@ -632,10 +636,10 @@ config MEMTEST
 	---help---
 	  This option adds a kernel parameter 'memtest', which allows memtest
 	  to be set.
-	        memtest=0, mean disabled; -- default
-	        memtest=1, mean do 1 test pattern;
-	        ...
-	        memtest=4, mean do 4 test patterns.
+		memtest=0, mean disabled; -- default
+		memtest=1, mean do 1 test pattern;
+		...
+		memtest=4, mean do 4 test patterns.
 	  If you are unsure how to answer this question, answer N.
 
 config X86_SUMMIT_NUMA
@@ -677,11 +681,11 @@ config APB_TIMER
        select DW_APB_TIMER
        depends on X86_INTEL_MID && SFI
        help
-         APB timer is the replacement for 8254, HPET on X86 MID platforms.
-         The APBT provides a stable time base on SMP
-         systems, unlike the TSC, but it is more expensive to access,
-         as it is off-chip. APB timers are always running regardless of CPU
-         C states, they are used as per CPU clockevent device when possible.
+	 APB timer is the replacement for 8254, HPET on X86 MID platforms.
+	 The APBT provides a stable time base on SMP
+	 systems, unlike the TSC, but it is more expensive to access,
+	 as it is off-chip. APB timers are always running regardless of CPU
+	 C states, they are used as per CPU clockevent device when possible.
 
 # Mark as expert because too many people got it wrong.
 # The code disables itself when not needed.
@@ -806,6 +810,8 @@ config IRQ_TIME_ACCOUNTING
 	  If in doubt, say N here.
 
 source "kernel/Kconfig.preempt"
+
+source "kernel/ipipe/Kconfig"
 
 config X86_UP_APIC
 	bool "Local APIC support on uniprocessors"

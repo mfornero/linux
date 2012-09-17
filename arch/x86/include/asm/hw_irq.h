@@ -35,6 +35,14 @@ extern void spurious_interrupt(void);
 extern void thermal_interrupt(void);
 extern void reschedule_interrupt(void);
 
+#ifdef CONFIG_IPIPE
+void ipipe_ipi0(void);
+void ipipe_ipi1(void);
+void ipipe_ipi2(void);
+void ipipe_ipi3(void);
+void ipipe_ipiX(void);
+#endif
+
 extern void invalidate_interrupt(void);
 extern void invalidate_interrupt0(void);
 extern void invalidate_interrupt1(void);
@@ -147,6 +155,7 @@ extern void smp_apic_timer_interrupt(struct pt_regs *);
 extern void smp_spurious_interrupt(struct pt_regs *);
 extern void smp_x86_platform_ipi(struct pt_regs *);
 extern void smp_error_interrupt(struct pt_regs *);
+extern void smp_perf_pending_interrupt(struct pt_regs *);
 #ifdef CONFIG_X86_IO_APIC
 extern asmlinkage void smp_irq_move_cleanup_interrupt(void);
 #endif
@@ -159,6 +168,7 @@ extern void smp_invalidate_interrupt(struct pt_regs *);
 #else
 extern asmlinkage void smp_invalidate_interrupt(struct pt_regs *);
 #endif
+extern asmlinkage void smp_reboot_interrupt(void);
 #endif
 
 extern void (*__initconst interrupt[NR_VECTORS-FIRST_EXTERNAL_VECTOR])(void);

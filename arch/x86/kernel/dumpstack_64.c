@@ -256,6 +256,11 @@ void show_regs(struct pt_regs *regs)
 	printk("CPU %d ", cpu);
 	print_modules();
 	__show_regs(regs, 1);
+#ifdef CONFIG_IPIPE
+	if (ipipe_current_domain != ipipe_root_domain)
+		printk("I-pipe domain %s\n", ipipe_current_domain->name);
+	else
+#endif /* CONFIG_IPIPE */
 	printk("Process %s (pid: %d, threadinfo %p, task %p)\n",
 		cur->comm, cur->pid, task_thread_info(cur), cur);
 

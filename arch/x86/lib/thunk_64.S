@@ -43,3 +43,24 @@ restore:
 	RESTORE_ARGS
 	ret
 	CFI_ENDPROC
+
+#ifdef CONFIG_IPIPE
+	/* rdi:	arg1 ... normal C conventions. rax is passed from C. */ 	
+	.macro THUNK_RETRAX name,func
+	.globl \name
+\name:	
+	CFI_STARTPROC
+	SAVE_ARGS
+	call \func
+	jmp  restore_norax
+	CFI_ENDPROC
+	.endm
+	THUNK_RETRAX __ipipe_syscall_root_thunk,__ipipe_syscall_root
+
+	CFI_STARTPROC
+	SAVE_ARGS
+restore_norax:	
+	RESTORE_ARGS 0
+	ret
+	CFI_ENDPROC
+#endif

@@ -53,6 +53,7 @@
 asmlinkage extern void ret_from_fork(void);
 
 DEFINE_PER_CPU(unsigned long, old_rsp);
+asmlinkage extern void thread_return(void);
 
 /* Prints also some state that isn't saved in the pt_regs */
 void __show_regs(struct pt_regs *regs, int all)
@@ -166,6 +167,7 @@ int copy_thread(unsigned long clone_flags, unsigned long sp,
 	p->thread.sp = (unsigned long) childregs;
 	p->thread.sp0 = (unsigned long) (childregs+1);
 	p->thread.usersp = me->thread.usersp;
+ 	p->thread.rip = (unsigned long) thread_return;
 
 	set_tsk_thread_flag(p, TIF_FORK);
 
@@ -232,10 +234,15 @@ start_thread_common(struct pt_regs *regs, unsigned long new_ip,
 	regs->cs		= _cs;
 	regs->ss		= _ss;
 	regs->flags		= X86_EFLAGS_IF;
+#ifndef CONFIG_IPIPE
 	/*
 	 * Free the old FP and other extended state
+	 *
+	 * Lazily handled when the pipeline is enabled; init_fpu()
+	 * will reset the state.
 	 */
 	free_thread_xstate(current);
+#endif
 }
 
 void
@@ -270,7 +277,7 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 {
 	struct thread_struct *prev = &prev_p->thread;
 	struct thread_struct *next = &next_p->thread;
-	int cpu = smp_processor_id();
+	int cpu = raw_smp_processor_id();
 	struct tss_struct *tss = &per_cpu(init_tss, cpu);
 	unsigned fsindex, gsindex;
 	fpu_switch_t fpu;

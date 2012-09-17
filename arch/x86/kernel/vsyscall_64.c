@@ -30,6 +30,7 @@
 #include <linux/getcpu.h>
 #include <linux/cpu.h>
 #include <linux/smp.h>
+#include <linux/ipipe_tickdev.h>
 #include <linux/notifier.h>
 #include <linux/syscalls.h>
 #include <linux/ratelimit.h>
@@ -106,6 +107,9 @@ void update_vsyscall(struct timespec *wall_time, struct timespec *wtm,
 		timespec_add(vsyscall_gtod_data.wall_time_coarse, *wtm);
 
 	write_seqcount_end(&vsyscall_gtod_data.seq);
+
+	if (clock == &clocksource_tsc)
+		ipipe_update_hostrt(wall_time, wtm, clock, mult);
 }
 
 static void warn_bad_vsyscall(const char *level, struct pt_regs *regs,

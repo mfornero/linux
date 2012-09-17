@@ -73,6 +73,14 @@ int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
 		if (ret)
 			return ret;
 		fpu_copy(&dst->thread.fpu, &src->thread.fpu);
+	} else {
+#ifdef CONFIG_IPIPE
+		/* unconditionally allocate, RT domain may need it */
+		memset(&dst->thread.fpu, 0, sizeof(dst->thread.fpu));
+		ret = fpu_alloc(&dst->thread.fpu);
+		if (ret)
+			return ret;
+#endif
 	}
 	return 0;
 }
@@ -93,6 +101,10 @@ void arch_task_cache_init(void)
         	kmem_cache_create("task_xstate", xstate_size,
 				  __alignof__(union thread_xstate),
 				  SLAB_PANIC | SLAB_NOTRACK, NULL);
+#ifdef CONFIG_IPIPE
+	memset(&current->thread.fpu, 0, sizeof(current->thread.fpu));
+	fpu_alloc(&current->thread.fpu);
+#endif
 }
 
 static inline void drop_fpu(struct task_struct *tsk)
@@ -518,7 +530,7 @@ bool set_pm_idle_to_default(void)
 }
 void stop_this_cpu(void *dummy)
 {
-	local_irq_disable();
+	hard_local_irq_disable();
 	/*
 	 * Remove this CPU:
 	 */
@@ -679,6 +691,11 @@ static void amd_e400_idle(void)
 
 void __cpuinit select_idle_routine(const struct cpuinfo_x86 *c)
 {
+#ifdef CONFIG_IPIPE
+#define default_to_mwait (boot_option_idle_override == IDLE_FORCE_MWAIT)
+#else
+#define default_to_mwait 1
+#endif
 #ifdef CONFIG_SMP
 	if (pm_idle == poll_idle && smp_num_siblings > 1) {
 		printk_once(KERN_WARNING "WARNING: polling idle and HT enabled,"
@@ -688,7 +705,7 @@ void __cpuinit select_idle_routine(const struct cpuinfo_x86 *c)
 	if (pm_idle)
 		return;
 
-	if (cpu_has(c, X86_FEATURE_MWAIT) && mwait_usable(c)) {
+	if (default_to_mwait && cpu_has(c, X86_FEATURE_MWAIT) && mwait_usable(c)) {
 		/*
 		 * One CPU supports mwait => All CPUs supports mwait
 		 */

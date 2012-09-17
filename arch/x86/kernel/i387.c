@@ -80,9 +80,11 @@ EXPORT_SYMBOL(irq_fpu_usable);
 void kernel_fpu_begin(void)
 {
 	struct task_struct *me = current;
+	unsigned long flags;
 
 	WARN_ON_ONCE(!irq_fpu_usable());
 	preempt_disable();
+	flags = hard_cond_local_irq_save();
 	if (__thread_has_fpu(me)) {
 		__save_init_fpu(me);
 		__thread_clear_has_fpu(me);
@@ -91,6 +93,7 @@ void kernel_fpu_begin(void)
 		this_cpu_write(fpu_owner_task, NULL);
 		clts();
 	}
+	hard_cond_local_irq_restore(flags);
 }
 EXPORT_SYMBOL(kernel_fpu_begin);
 
