@@ -2398,36 +2398,6 @@ void irq_force_complete_move(int irq)
 static inline void irq_complete_move(struct irq_cfg *cfg) { }
 #endif
 
-#if defined(CONFIG_IPIPE) && defined(CONFIG_SMP)
-
-static void move_xxapic_irq(struct irq_data *data)
-{
-	unsigned int irq = data->irq;
-	struct irq_desc *desc = irq_to_desc(irq);
-	struct irq_cfg *cfg = data->chip_data;
-
-	if (desc->handle_irq == &handle_edge_irq) {
-		raw_spin_lock(&desc->lock);
-		irq_complete_move(cfg);
-		irq_move_irq(data);
-		raw_spin_unlock(&desc->lock);
-	} else if (desc->handle_irq == &handle_fasteoi_irq) {
-		raw_spin_lock(&desc->lock);
-		irq_complete_move(cfg);
-		if (irq_remapped(cfg))
-			eoi_ioapic_irq(irq, cfg);
-		if (unlikely(irqd_is_setaffinity_pending(data))) {
-			if (!io_apic_level_ack_pending(cfg))
-				irq_move_masked_irq(data);
-			unmask_ioapic(irq, cfg);
-		}
-		raw_spin_unlock(&desc->lock);
-	} else
-		WARN_ON_ONCE(1);
-}
-
-#endif /* CONFIG_IPIPE && CONFIG_SMP */
-
 static void ack_apic_edge(struct irq_data *data)
 {
 #ifndef CONFIG_IPIPE
@@ -2439,7 +2409,7 @@ static void ack_apic_edge(struct irq_data *data)
 
 atomic_t irq_mis_count;
 
-#ifdef CONFIG_GENERIC_PENDING_IRQ
+#if defined(CONFIG_GENERIC_PENDING_IRQ) || defined(CONFIG_IPIPE)
 static bool io_apic_level_ack_pending(struct irq_cfg *cfg)
 {
 	struct irq_pin_list *entry;
@@ -2518,6 +2488,36 @@ static inline void ioapic_irqd_unmask(struct irq_data *data,
 {
 }
 #endif
+
+#if defined(CONFIG_IPIPE) && defined(CONFIG_SMP)
+
+static void move_xxapic_irq(struct irq_data *data)
+{
+	unsigned int irq = data->irq;
+	struct irq_desc *desc = irq_to_desc(irq);
+	struct irq_cfg *cfg = data->chip_data;
+
+	if (desc->handle_irq == &handle_edge_irq) {
+		raw_spin_lock(&desc->lock);
+		irq_complete_move(cfg);
+		irq_move_irq(data);
+		raw_spin_unlock(&desc->lock);
+	} else if (desc->handle_irq == &handle_fasteoi_irq) {
+		raw_spin_lock(&desc->lock);
+		irq_complete_move(cfg);
+		if (irq_remapped(cfg))
+			eoi_ioapic_irq(irq, cfg);
+		if (unlikely(irqd_is_setaffinity_pending(data))) {
+			if (!io_apic_level_ack_pending(cfg))
+				irq_move_masked_irq(data);
+			unmask_ioapic(irq, cfg);
+		}
+		raw_spin_unlock(&desc->lock);
+	} else
+		WARN_ON_ONCE(1);
+}
+
+#endif /* CONFIG_IPIPE && CONFIG_SMP */
 
 static void ack_apic_level(struct irq_data *data)
 {
