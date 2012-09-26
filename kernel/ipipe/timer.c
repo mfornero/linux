@@ -178,6 +178,32 @@ static void install_pcpu_timer(unsigned cpu, unsigned hrclock_freq,
 	t->c2t_frac = tmp;
 }
 
+static void select_root_only_timer(unsigned cpu, unsigned hrclock_khz,
+				   const struct cpumask *mask,
+				   struct ipipe_timer *t) {
+	unsigned icpu;
+	struct clock_event_device *evtdev;
+
+	/*
+	 * If no ipipe-supported CPU shares an interrupt with the
+	 * timer, we do not need to care about it.
+	 */
+	for_each_cpu(icpu, mask) {
+		if (t->irq == per_cpu(ipipe_percpu.hrtimer_irq, icpu)) {
+#ifdef CONFIG_GENERIC_CLOCKEVENTS
+			evtdev = t->host_timer;
+			if (evtdev && evtdev->mode == CLOCK_EVT_MODE_SHUTDOWN)
+				continue;
+#endif /* CONFIG_GENERIC_CLOCKEVENTS */
+			goto found;
+		}
+	}
+
+	return;
+
+found:
+	install_pcpu_timer(cpu, hrclock_khz, t);
+}
 
 /*
  * Choose per-cpu timers with the highest rating by traversing the
@@ -191,6 +217,7 @@ int ipipe_select_timers(const struct cpumask *mask)
 	struct clock_event_device *evtdev;
 	unsigned long flags;
 	unsigned cpu;
+	cpumask_t fixup;
 
 	if (__ipipe_hrclock_freq > UINT_MAX) {
 		tmp = __ipipe_hrclock_freq;
@@ -200,6 +227,8 @@ int ipipe_select_timers(const struct cpumask *mask)
 		hrclock_freq = __ipipe_hrclock_freq;
 
 	spin_lock_irqsave(&lock, flags);
+
+	/* First, choose timers for the CPUs handled by ipipe */
 	for_each_cpu(cpu, mask) {
 		list_for_each_entry(t, &timers, link) {
 			if (!cpumask_test_cpu(cpu, t->cpumask))
@@ -219,6 +248,24 @@ int ipipe_select_timers(const struct cpumask *mask)
 found:
 		install_pcpu_timer(cpu, hrclock_freq, t);
 	}
+
+	/*
+	 * Second, check if we need to fix up any CPUs not supported
+	 * by ipipe (but by Linux) whose interrupt may need to be
+	 * forwarded because they have the same IRQ as an ipipe-enabled
+	 * timer.
+	 */
+	cpumask_andnot(&fixup, cpu_online_mask, mask);
+
+	for_each_cpu(cpu, &fixup) {
+		list_for_each_entry(t, &timers, link) {
+			if (!cpumask_test_cpu(cpu, t->cpumask))
+				continue;
+
+			select_root_only_timer(cpu, hrclock_freq, mask, t);
+		}
+	}
+
 	spin_unlock_irqrestore(&lock, flags);
 
 	flags = ipipe_critical_enter(ipipe_timer_request_sync);
