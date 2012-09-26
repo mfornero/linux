@@ -154,21 +154,45 @@ static void ipipe_timer_request_sync(void)
 	timer->request(timer, steal);
 }
 
+/* Set up a timer as per-cpu timer for ipipe */
+static void install_pcpu_timer(unsigned cpu, unsigned hrclock_freq,
+			      struct ipipe_timer *t) {
+	unsigned hrtimer_freq;
+	unsigned long long tmp;
+
+	if (__ipipe_hrtimer_freq == 0)
+		__ipipe_hrtimer_freq = t->freq;
+
+	per_cpu(ipipe_percpu.hrtimer_irq, cpu) = t->irq;
+	per_cpu(percpu_timer, cpu) = t;
+
+	hrtimer_freq = t->freq;
+	if (__ipipe_hrclock_freq > UINT_MAX)
+		hrtimer_freq /= 1000;
+
+	t->c2t_integ = hrtimer_freq / hrclock_freq;
+	tmp = (((unsigned long long)
+		(hrtimer_freq % hrclock_freq)) << 32)
+		+ hrclock_freq - 1;
+	do_div(tmp, hrclock_freq);
+	t->c2t_frac = tmp;
+}
+
+
 /*
- * choose per-cpu timer: we walk the list, and find the timer with the
- * highest rating.
+ * Choose per-cpu timers with the highest rating by traversing the
+ * rating-sorted list for each CPU.
  */
 int ipipe_select_timers(const struct cpumask *mask)
 {
-	struct clock_event_device *evtdev;
-	unsigned hrclock_freq, hrtimer_freq;
+	unsigned hrclock_freq;
 	unsigned long long tmp;
 	struct ipipe_timer *t;
+	struct clock_event_device *evtdev;
 	unsigned long flags;
-	unsigned cpu, khz;
+	unsigned cpu;
 
-	khz = __ipipe_hrclock_freq > UINT_MAX;
-	if (khz) {
+	if (__ipipe_hrclock_freq > UINT_MAX) {
 		tmp = __ipipe_hrclock_freq;
 		do_div(tmp, 1000);
 		hrclock_freq = tmp;
@@ -181,30 +205,19 @@ int ipipe_select_timers(const struct cpumask *mask)
 			if (!cpumask_test_cpu(cpu, t->cpumask))
 				continue;
 
-			evtdev = t->host_timer;
 #ifdef CONFIG_GENERIC_CLOCKEVENTS
-			if (!evtdev
-			    || evtdev->mode != CLOCK_EVT_MODE_SHUTDOWN)
+			evtdev = t->host_timer;
+			if (evtdev && evtdev->mode == CLOCK_EVT_MODE_SHUTDOWN)
+				continue;
 #endif /* CONFIG_GENERIC_CLOCKEVENTS */
-				goto found;
+			goto found;
 		}
-		printk("I-pipe: could not find timer for cpu #%d\n", cpu);
-		goto err_remove_all;
 
-	  found:
-		if (__ipipe_hrtimer_freq == 0)
-			__ipipe_hrtimer_freq = t->freq;
-		per_cpu(ipipe_percpu.hrtimer_irq, cpu) = t->irq;
-		per_cpu(percpu_timer, cpu) = t;
-		hrtimer_freq = t->freq;
-		if (khz)
-			hrtimer_freq /= 1000;
-		t->c2t_integ = hrtimer_freq / hrclock_freq;
-		tmp = (((unsigned long long)
-			(hrtimer_freq % hrclock_freq)) << 32)
-			+ hrclock_freq - 1;
-		do_div(tmp, hrclock_freq);
-		t->c2t_frac = tmp;
+		printk("I-pipe: could not find timer for cpu #%d\n",
+		       cpu);
+		goto err_remove_all;
+found:
+		install_pcpu_timer(cpu, hrclock_freq, t);
 	}
 	spin_unlock_irqrestore(&lock, flags);
 
