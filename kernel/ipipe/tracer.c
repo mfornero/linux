@@ -452,6 +452,15 @@ static void __ipipe_global_path_unlock(unsigned long flags)
 	__ipipe_spin_unlock_irqcomplete(flags);
 }
 
+void notrace asmlinkage
+ipipe_trace_asm(enum ipipe_trace_type type, unsigned long eip,
+		unsigned long parent_eip, unsigned long v)
+{
+	if (!ipipe_trace_enable)
+		return;
+	__ipipe_trace(type, eip, parent_eip, v);
+}
+
 void notrace ipipe_trace_begin(unsigned long v)
 {
 	if (!ipipe_trace_enable)
