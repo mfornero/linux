@@ -579,6 +579,7 @@ int __ipipe_handle_irq(struct pt_regs *regs)
 {
 	struct ipipe_percpu_data *p = __ipipe_this_cpu_ptr(&ipipe_percpu);
 	int irq, vector = regs->orig_ax, flags = 0;
+	struct pt_regs *tick_regs;
 
 	if (likely(vector < 0)) {
 		irq = __this_cpu_read(vector_irq[~vector]);
@@ -588,8 +589,6 @@ int __ipipe_handle_irq(struct pt_regs *regs)
 		flags = IPIPE_IRQF_NOACK;
 	}
 
-	__ipipe_dispatch_irq(irq, flags);
-
 	/*
 	 * Given our deferred dispatching model for regular IRQs, we
 	 * only record CPU regs for the last timer interrupt, so that
@@ -597,8 +596,6 @@ int __ipipe_handle_irq(struct pt_regs *regs)
 	 * that no other interrupt handler cares for such information.
 	 */
 	if (irq == p->hrtimer_irq || p->hrtimer_irq == -1) {
-		struct pt_regs *tick_regs;
-
 		tick_regs = &p->tick_regs;
 		tick_regs->flags = regs->flags;
 		tick_regs->cs = regs->cs;
@@ -611,6 +608,8 @@ int __ipipe_handle_irq(struct pt_regs *regs)
 		if (!__ipipe_root_p)
 			tick_regs->flags &= ~X86_EFLAGS_IF;
 	}
+
+	__ipipe_dispatch_irq(irq, flags);
 
 	if (user_mode(regs) && (current->ipipe.flags & PF_MAYDAY)) {
 		current->ipipe.flags &= ~PF_MAYDAY;
