@@ -353,7 +353,7 @@ extern unsigned long used_vectors[];
 static inline void alloc_system_vector(int vector)
 {
 	if (!test_bit(vector, used_vectors)) {
-#ifdef CONFIG_X86_LOCAL_APIC
+#if defined(CONFIG_X86_LOCAL_APIC) && defined(CONFIG_IPIPE)
 		unsigned cpu;
 
 		for_each_possible_cpu(cpu)
