@@ -1267,6 +1267,9 @@ void __setup_vector_irq(int cpu)
 	}
 	/* Mark the free vectors */
 	for (vector = 0; vector < NR_VECTORS; ++vector) {
+		/* I-pipe requires initialized vector_irq for system vectors */
+		if (test_bit(vector, used_vectors))
+			continue;
 		irq = per_cpu(vector_irq, cpu)[vector];
 		if (irq < 0)
 			continue;

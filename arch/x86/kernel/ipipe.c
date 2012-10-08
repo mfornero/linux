@@ -581,16 +581,8 @@ int __ipipe_handle_irq(struct pt_regs *regs)
 	int irq, vector = regs->orig_ax, flags = 0;
 
 	if (likely(vector < 0)) {
-		vector = ~vector;
-#ifdef CONFIG_X86_LOCAL_APIC
-		if (vector >= FIRST_SYSTEM_VECTOR)
-			irq = ipipe_apic_vector_irq(vector);
-		else
-#endif	/* CONFIG_X86_LOCAL_APIC */
-		{
-			irq = __this_cpu_read(vector_irq[vector]);
-			BUG_ON(irq < 0);
-		}
+		irq = __this_cpu_read(vector_irq[~vector]);
+		BUG_ON(irq < 0);
 	} else { /* Software-generated. */
 		irq = vector;
 		flags = IPIPE_IRQF_NOACK;
