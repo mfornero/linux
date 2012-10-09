@@ -634,6 +634,12 @@ void update_vsyscall(struct timespec *wall_time, struct timespec *wtm,
 void update_vsyscall_tz(void)
 {
 }
+
+#ifdef CONFIG_IPIPE_WANT_CLOCKSOURCE
+u64 __ipipe_get_cs_tsc(void);
+EXPORT_SYMBOL_GPL(__ipipe_get_cs_tsc);
+#endif
+
 #endif /* CONFIG_X86_32 */
 
 struct task_struct *__switch_to(struct task_struct *prev_p,
