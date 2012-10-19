@@ -1215,7 +1215,7 @@ void __ipipe_dispatch_irq(unsigned int irq, int flags) /* hw interrupts off */
 		chained_irq = 0;
 	} else {
 		desc = irq_to_desc(irq);
-		chained_irq = ipipe_chained_irq_p(desc);
+		chained_irq = desc ? ipipe_chained_irq_p(desc) : 0;
 	}
 	if (flags & IPIPE_IRQF_NOACK)
 		IPIPE_WARN_ONCE(chained_irq);
