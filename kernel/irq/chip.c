@@ -167,8 +167,10 @@ int irq_startup(struct irq_desc *desc, bool resend)
 	desc->depth = 0;
 
 	if (desc->irq_data.chip->irq_startup) {
+		unsigned long flags = hard_cond_local_irq_save();
 		ret = desc->irq_data.chip->irq_startup(&desc->irq_data);
 		irq_state_clr_masked(desc);
+		hard_cond_local_irq_restore(flags);
 	} else {
 		irq_enable(desc);
 	}
@@ -192,12 +194,14 @@ void irq_shutdown(struct irq_desc *desc)
 
 void irq_enable(struct irq_desc *desc)
 {
+	unsigned long flags = hard_cond_local_irq_save();
 	irq_state_clr_disabled(desc);
 	if (desc->irq_data.chip->irq_enable)
 		desc->irq_data.chip->irq_enable(&desc->irq_data);
 	else
 		desc->irq_data.chip->irq_unmask(&desc->irq_data);
 	irq_state_clr_masked(desc);
+	hard_cond_local_irq_restore(flags);
 }
 
 void irq_disable(struct irq_desc *desc)
@@ -211,11 +215,13 @@ void irq_disable(struct irq_desc *desc)
 
 void irq_percpu_enable(struct irq_desc *desc, unsigned int cpu)
 {
+	unsigned long flags = hard_cond_local_irq_save();
 	if (desc->irq_data.chip->irq_enable)
 		desc->irq_data.chip->irq_enable(&desc->irq_data);
 	else
 		desc->irq_data.chip->irq_unmask(&desc->irq_data);
 	cpumask_set_cpu(cpu, desc->percpu_enabled);
+	hard_cond_local_irq_restore(flags);
 }
 
 void irq_percpu_disable(struct irq_desc *desc, unsigned int cpu)
