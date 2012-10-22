@@ -1023,7 +1023,7 @@ static int __ipipe_prtrace_show(struct seq_file *m, void *p)
 	if (verbose_trace)
 		switch (point->type & IPIPE_TYPE_MASK) {
 			case IPIPE_TRACE_FUNC:
-				seq_puts(m, "		");
+				seq_puts(m, "           ");
 				break;
 
 			case IPIPE_TRACE_PID:
