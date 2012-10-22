@@ -851,7 +851,8 @@ static void __ipipe_print_symname(struct seq_file *m, unsigned long eip)
 			printk("%s+0x%lx", sym_name, offset);
 			if (modname)
 				printk(" [%s]", modname);
-		}
+		} else
+			printk("<%08lx>", eip);
 	} else
 #endif /* CONFIG_IPIPE_TRACE_PANIC */
 	{
