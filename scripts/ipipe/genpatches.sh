@@ -68,7 +68,7 @@ match($0, /^diff --git a\/drivers\/([^[:blank:]]*)/, file) {
     f=file[1]
 
     switch(f) {
-    case /clocksource\/i8253.c|pci\/htirq.c/:
+    case /clocksource\/i8253.c|pci\/htirq.c|Makefile|ipipe_i486_tsc_emu.S/:
 	 a="x86"
 	 break
 
@@ -76,7 +76,7 @@ match($0, /^diff --git a\/drivers\/([^[:blank:]]*)/, file) {
 	 a="arm"
 	 break
 
-    case /tty\/serial\/8250\/8250.c/:
+    case /tty\/serial\/8250\/8250.c|cpuidle/:
 	 a="noarch"
 	 break
 
