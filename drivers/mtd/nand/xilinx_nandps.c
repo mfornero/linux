@@ -17,28 +17,24 @@
  * This driver is based on plat_nand.c and mxc_nand.c drivers
  */
 
+#include <linux/delay.h>
+#include <linux/init.h>
+#include <linux/interrupt.h>
+#include <linux/io.h>
+#include <linux/ioport.h>
+#include <linux/irq.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
-#include <linux/init.h>
-#include <linux/ioport.h>
-#include <linux/platform_device.h>
-#include <linux/interrupt.h>
-#include <linux/irq.h>
-#include <linux/io.h>
-#include <linux/slab.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/nand.h>
-#include <linux/mtd/partitions.h>
-#include <linux/delay.h>
 #include <linux/mtd/nand_ecc.h>
-#include <mach/smc.h>
-#include <mach/nand.h>
-
-#ifdef CONFIG_OF
+#include <linux/mtd/partitions.h>
 #include <linux/of_address.h>
 #include <linux/of_device.h>
 #include <linux/of_platform.h>
-#endif
+#include <linux/platform_device.h>
+#include <linux/slab.h>
+#include <mach/smc.h>
 
 #define XNANDPS_DRIVER_NAME "xilinx_nandps"
 
@@ -125,6 +121,12 @@
 #define xnandps_write32(addr, val)	__raw_writel((val), (addr))
 
 
+struct xnand_platform_data {
+	unsigned int            options;
+	struct mtd_partition    *parts;
+	int			nr_parts;
+};
+
 /**
  * struct xnandps_command_format - Defines NAND flash command format
  * @start_cmd:		First cycle command (Start command)
@@ -153,8 +155,6 @@ struct xnandps_info {
 	struct nand_chip	chip;
 	struct mtd_info		mtd;
 	struct mtd_partition	*parts;
-	struct platform_device	*pdev;
-
 	void __iomem		*nand_base;
 	void __iomem		*smc_regs;
 	unsigned long		end_cmd_pending;
@@ -378,7 +378,8 @@ int xnandps_correct_data(struct mtd_info *mtd, unsigned char *buf,
 
 	if ((ecc_odd == 0) && (ecc_even == 0))
 		return 0;       /* no error */
-	else if (ecc_odd == (~ecc_even & 0xfff)) {
+
+	if (ecc_odd == (~ecc_even & 0xfff)) {
 		/* bits [11:3] of error code is byte offset */
 		byte_addr = (ecc_odd >> 3) & 0x1ff;
 		/* bits [2:0] of error code is bit offset */
@@ -386,11 +387,12 @@ int xnandps_correct_data(struct mtd_info *mtd, unsigned char *buf,
 		/* Toggling error bit */
 		buf[byte_addr] ^= (1 << bit_addr);
 		return 1;
-	} else if (onehot(ecc_odd | ecc_even) == 1) {
-		return 1; /* one error in parity */
-	} else {
-		return -1; /* Uncorrectable error */
 	}
+
+	if (onehot(ecc_odd | ecc_even) == 1)
+		return 1; /* one error in parity */
+
+	return -1; /* Uncorrectable error */
 }
 
 /**
@@ -820,14 +822,14 @@ static void xnandps_cmd_function(struct mtd_info *mtd, unsigned int command,
 				xnandps_write32(cmd_addr, cmd_data);
 				cmd_data = (page_addr >> 16);
 			}
-		} else
+		} else {
 			cmd_data |= page_addr << 8;
-	}
-	/* Erase */
-	else if (page_addr != -1)
+		}
+	} else if (page_addr != -1) {
+		/* Erase */
 		cmd_data = page_addr;
-	/* Change read/write column, read id etc */
-	else if (column != -1) {
+	} else if (column != -1) {
+		/* Change read/write column, read id etc */
 		/* Adjust columns for 16 bit bus width */
 		if ((chip->options & NAND_BUSWIDTH_16) &&
 			((command == NAND_CMD_READ0) ||
@@ -836,8 +838,7 @@ static void xnandps_cmd_function(struct mtd_info *mtd, unsigned int command,
 			(command == NAND_CMD_RNDIN)))
 				column >>= 1;
 		cmd_data = column;
-	} else
-		;
+	}
 
 	xnandps_write32(cmd_addr, cmd_data);
 
@@ -945,9 +946,6 @@ static int xnandps_device_ready(struct mtd_info *mtd)
 	return status ? 1 : 0;
 }
 
-#ifdef CONFIG_OF
-static const struct of_device_id __devinitconst xnandps_of_match[];
-#endif
 /**
  * xnandps_probe - Probe method for the NAND driver
  * @pdev:	Pointer to the platform_device structure
@@ -968,26 +966,10 @@ static int __devinit xnandps_probe(struct platform_device *pdev)
 	u8 get_feature;
 	u8 set_feature[4] = {0x08, 0x00, 0x00, 0x00};
 	int ondie_ecc_enabled = 0;
-	int ez_nand_supported = 0;
 	unsigned long ecc_cfg;
-	struct xnand_platform_data	*pdata = NULL;
 	struct mtd_part_parser_data ppdata;
-#ifdef CONFIG_OF
-	const struct of_device_id *match;
 	const unsigned int *prop;
-#endif
-
-#ifdef CONFIG_OF
-	match = of_match_device(xnandps_of_match, &pdev->dev);
-	if (match)
-		pdata = match->data;
-#else
-	pdata = pdev->dev.platform_data;
-#endif
-	if (pdata == NULL) {
-		dev_err(&pdev->dev, "platform data missing\n");
-		return -ENODEV;
-	}
+	u32 options = 0;
 
 	xnand = kzalloc(sizeof(struct xnandps_info), GFP_KERNEL);
 	if (!xnand) {
@@ -1038,23 +1020,21 @@ static int __devinit xnandps_probe(struct platform_device *pdev)
 		goto out_release_smc_mem_region;
 	}
 	/* Get x8 or x16 mode from device tree */
-#ifdef CONFIG_OF
 	prop = of_get_property(pdev->dev.of_node, "xlnx,nand-width", NULL);
 	if (prop) {
 		if (be32_to_cpup(prop) == 16) {
-			pdata->options |= NAND_BUSWIDTH_16;
+			options |= NAND_BUSWIDTH_16;
 		} else if (be32_to_cpup(prop) == 8) {
-			pdata->options &= ~NAND_BUSWIDTH_16;
+			options &= ~NAND_BUSWIDTH_16;
 		} else {
 			dev_info(&pdev->dev, "xlnx,nand-width not valid, using 8");
-			pdata->options &= ~NAND_BUSWIDTH_16;
+			options &= ~NAND_BUSWIDTH_16;
 		}
 	} else {
 		dev_info(&pdev->dev, "xlnx,nand-width not in device tree, using 8");
-		pdata->options &= ~NAND_BUSWIDTH_16;
+		options &= ~NAND_BUSWIDTH_16;
 	}
-#endif
-	xnand->pdev = pdev;
+
 	/* Link the private data with the MTD structure */
 	mtd = &xnand->mtd;
 	nand_chip = &xnand->chip;
@@ -1082,7 +1062,7 @@ static int __devinit xnandps_probe(struct platform_device *pdev)
 	nand_chip->verify_buf = xnandps_verify_buf;
 
 	/* Set the device option and flash width */
-	nand_chip->options = pdata->options;
+	nand_chip->options = options;
 	nand_chip->bbt_options = NAND_BBT_USE_FLASH;
 
 	platform_set_drvdata(pdev, xnand);
@@ -1097,7 +1077,7 @@ static int __devinit xnandps_probe(struct platform_device *pdev)
 		goto out_unmap_all_mem;
 	}
 
-	/* Check if On-Die ECC flash or Clear NAND flash */
+	/* Check if On-Die ECC flash */
 	nand_chip->cmdfunc(mtd, NAND_CMD_RESET, -1, -1);
 	nand_chip->cmdfunc(mtd, NAND_CMD_READID, 0x00, -1);
 
@@ -1136,12 +1116,9 @@ static int __devinit xnandps_probe(struct platform_device *pdev)
 			if (get_feature & 0x08)
 				ondie_ecc_enabled = 1;
 		}
-	} else if ((nand_chip->onfi_version == 23) &&
-				(nand_chip->onfi_params.features & (1 << 9))) {
-		ez_nand_supported = 1;
 	}
 
-	if (ondie_ecc_enabled || ez_nand_supported) {
+	if (ondie_ecc_enabled) {
 		/* bypass the controller ECC block */
 		ecc_cfg = xnandps_read32(xnand->smc_regs +
 			XSMCPS_ECC_MEMCFG_OFFSET(XSMCPS_ECC_IF1_OFFSET));
@@ -1162,14 +1139,11 @@ static int __devinit xnandps_probe(struct platform_device *pdev)
 		nand_chip->ecc.size = mtd->writesize;
 		nand_chip->ecc.bytes = 0;
 		nand_chip->ecc.strength = 1;
-
 		/* On-Die ECC spare bytes offset 8 is used for ECC codes */
-		if (ondie_ecc_enabled) {
-			nand_chip->ecc.layout = &ondie_nand_oob_64;
-			/* Use the BBT pattern descriptors */
-			nand_chip->bbt_td = &bbt_main_descr;
-			nand_chip->bbt_md = &bbt_mirror_descr;
-		}
+		nand_chip->ecc.layout = &ondie_nand_oob_64;
+		/* Use the BBT pattern descriptors */
+		nand_chip->bbt_td = &bbt_main_descr;
+		nand_chip->bbt_md = &bbt_mirror_descr;
 	} else {
 		/* Hardware ECC generates 3 bytes ECC code for each 512 bytes */
 		nand_chip->ecc.mode = NAND_ECC_HW;
@@ -1185,7 +1159,7 @@ static int __devinit xnandps_probe(struct platform_device *pdev)
 		nand_chip->ecc.read_oob = xnandps_read_oob;
 		nand_chip->ecc.write_oob = xnandps_write_oob;
 		nand_chip->ecc.strength = 1;
-	
+
 		switch (mtd->writesize) {
 		case 512:
 			ecc_page_size = 0x1;
@@ -1230,8 +1204,6 @@ static int __devinit xnandps_probe(struct platform_device *pdev)
 			nand_chip->ecc.layout = &nand_oob_16;
 		else if (mtd->oobsize == 64)
 			nand_chip->ecc.layout = &nand_oob_64;
-		else
-			;
 	}
 
 	/* second phase scan */
@@ -1241,9 +1213,8 @@ static int __devinit xnandps_probe(struct platform_device *pdev)
 		goto out_unmap_all_mem;
 	}
 
-#ifdef CONFIG_OF
 	ppdata.of_node = pdev->dev.of_node;
-#endif
+
 	mtd_device_parse_register(&xnand->mtd, NULL, &ppdata,
 			NULL, 0);
 
@@ -1301,18 +1272,12 @@ static int __devexit xnandps_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_OF
-static struct xnand_platform_data xnandps_config;
-
 /* Match table for device tree binding */
 static const struct of_device_id __devinitconst xnandps_of_match[] = {
-	{ .compatible = "xlnx,ps7-nand-1.00.a", .data = &xnandps_config},
+	{ .compatible = "xlnx,ps7-nand-1.00.a" },
 	{},
 };
 MODULE_DEVICE_TABLE(of, xnandps_of_match);
-#else
-#define xnandps_of_match NULL
-#endif
 
 /*
  * xnandps_driver - This structure defines the NAND subsystem platform driver
@@ -1320,37 +1285,14 @@ MODULE_DEVICE_TABLE(of, xnandps_of_match);
 static struct platform_driver xnandps_driver = {
 	.probe		= xnandps_probe,
 	.remove		= __devexit_p(xnandps_remove),
-	.suspend	= NULL,
-	.resume		= NULL,
 	.driver		= {
 		.name	= XNANDPS_DRIVER_NAME,
 		.owner	= THIS_MODULE,
-#ifdef CONFIG_OF
 		.of_match_table = xnandps_of_match,
-#endif
 	},
 };
 
-/**
- * xnandps_init - NAND driver module initialization function
- *
- * returns:	0 on success and error value on failure
- **/
-static int __init xnandps_init(void)
-{
-	return platform_driver_register(&xnandps_driver);
-}
-
-/**
- * xnandps_exit - NAND driver module exit function
- **/
-static void __exit xnandps_exit(void)
-{
-	platform_driver_unregister(&xnandps_driver);
-}
-
-module_init(xnandps_init);
-module_exit(xnandps_exit);
+module_platform_driver(xnandps_driver);
 
 MODULE_AUTHOR("Xilinx, Inc.");
 MODULE_ALIAS("platform:" XNANDPS_DRIVER_NAME);
