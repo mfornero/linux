@@ -265,7 +265,7 @@ int ipipe_timer_start(void (*tick_handler)(void),
 	struct clock_event_device *evtdev;
 	struct ipipe_timer *timer;
 	unsigned long flags;
-	int steal, rc;
+	int steal, ret;
 
 	timer = per_cpu(percpu_timer, cpu);
 	evtdev = timer->host_timer;
@@ -273,16 +273,15 @@ int ipipe_timer_start(void (*tick_handler)(void),
 	flags = ipipe_critical_enter(NULL);
 
 	if (cpu == 0 || timer->irq != per_cpu(ipipe_percpu.hrtimer_irq, 0)) {
-		rc = ipipe_request_irq(ipipe_head_domain, timer->irq,
+		ret = ipipe_request_irq(ipipe_head_domain, timer->irq,
 				       (ipipe_irq_handler_t)tick_handler,
 				       NULL, __ipipe_ack_hrtimer_irq);
-		if (rc < 0)
+		if (ret < 0)
 			goto done;
 	}
 
 #ifdef CONFIG_GENERIC_CLOCKEVENTS
 	steal = evtdev != NULL && evtdev->mode != CLOCK_EVT_MODE_UNUSED;
-
 	if (steal && evtdev->ipipe_stolen == 0) {
 		timer->real_mult = evtdev->mult;
 		timer->real_shift = evtdev->shift;
@@ -295,45 +294,54 @@ int ipipe_timer_start(void (*tick_handler)(void),
 		evtdev->ipipe_stolen = 1;
 	}
 
-	rc = evtdev ? evtdev->mode : CLOCK_EVT_MODE_UNUSED;
+	ret = evtdev ? evtdev->mode : CLOCK_EVT_MODE_UNUSED;
 #else /* CONFIG_GENERIC_CLOCKEVENTS */
 	steal = 1;
-	rc = 0;
+	ret = 0;
 #endif /* CONFIG_GENERIC_CLOCKEVENTS */
 
   done:
 	ipipe_critical_exit(flags);
 
-	return rc;
+#ifdef CONFIG_GENERIC_CLOCKEVENTS
+	if (evtdev && evtdev->mode == CLOCK_EVT_MODE_UNUSED)
+		ipipe_enable_irq(timer->irq);
+#endif
+	return ret;
 }
 
 void ipipe_timer_stop(unsigned cpu)
 {
+	unsigned long __maybe_unused flags;
 	struct clock_event_device *evtdev;
 	struct ipipe_timer *timer;
-	unsigned long flags;
 
 	timer = per_cpu(percpu_timer, cpu);
 	evtdev = timer->host_timer;
 
-	flags = ipipe_critical_enter(NULL);
-
 #ifdef CONFIG_GENERIC_CLOCKEVENTS
-	if (evtdev && evtdev->ipipe_stolen) {
-		evtdev->mult = timer->real_mult;
-		evtdev->shift = timer->real_shift;
-		evtdev->set_mode = timer->real_set_mode;
-		evtdev->set_next_event = timer->real_set_next_event;
-		timer->real_mult = timer->real_shift = 0;
-		timer->real_set_mode = NULL;
-		timer->real_set_next_event = NULL;
-		evtdev->ipipe_stolen = 0;
+	if (evtdev) {
+		if (evtdev->mode == CLOCK_EVT_MODE_UNUSED)
+			ipipe_disable_irq(timer->irq);
+
+		flags = ipipe_critical_enter(NULL);
+
+		if (evtdev->ipipe_stolen) {
+			evtdev->mult = timer->real_mult;
+			evtdev->shift = timer->real_shift;
+			evtdev->set_mode = timer->real_set_mode;
+			evtdev->set_next_event = timer->real_set_next_event;
+			timer->real_mult = timer->real_shift = 0;
+			timer->real_set_mode = NULL;
+			timer->real_set_next_event = NULL;
+			evtdev->ipipe_stolen = 0;
+		}
+
+		ipipe_critical_exit(flags);
 	}
 #endif /* CONFIG_GENERIC_CLOCKEVENTS */
 
 	ipipe_free_irq(ipipe_head_domain, timer->irq);
-
-	ipipe_critical_exit(flags);
 }
 
 void ipipe_timer_set(unsigned long cdelay)
