@@ -71,6 +71,11 @@ struct ipipe_arch_sysinfo {
 #define ipipe_tsc2ns(_t)	(((unsigned long)(_t)) * __ipipe_freq_scale)
 #define ipipe_tsc2us(_t)	(ipipe_tsc2ns(_t) / 1000 + 1)
 
+static inline const char *ipipe_clock_name(void)
+{
+	return "cyclectr";
+}
+
 /* Private interface -- Internal use only */
 
 #define __ipipe_check_platform()	do { } while (0)
