@@ -99,6 +99,11 @@ extern unsigned long __ipipe_hrtimer_freq;
 	})
 #endif /* CONFIG_PPC32 */
 
+static inline const char *ipipe_clock_name(void)
+{
+	return "timebase";
+}
+
 /* Private interface -- Internal use only */
 
 #define __ipipe_check_platform()		do { } while(0)
