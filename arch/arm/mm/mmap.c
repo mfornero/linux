@@ -33,6 +33,7 @@ static inline unsigned long COLOUR_ALIGN_DOWN(unsigned long addr,
 
 static int mmap_is_legacy(void)
 {
+#ifndef CONFIG_ARM_FCSE
 	if (current->personality & ADDR_COMPAT_LAYOUT)
 		return 1;
 
@@ -40,6 +41,9 @@ static int mmap_is_legacy(void)
 		return 1;
 
 	return sysctl_legacy_va_layout;
+#else /* CONFIG_FCSE */
+	return 1;
+#endif /* CONFIG_FCSE */
 }
 
 static unsigned long mmap_base(unsigned long rnd)
@@ -80,6 +84,9 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 	if (aliasing)
 		do_align = filp || (flags & MAP_SHARED);
 
+#ifdef CONFIG_ARM_FCSE
+	start_addr = addr;
+#endif /* CONFIG_ARM_FCSE */
 	/*
 	 * We enforce the MAP_FIXED case.
 	 */
@@ -87,7 +94,7 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 		if (aliasing && flags & MAP_SHARED &&
 		    (addr - (pgoff << PAGE_SHIFT)) & (SHMLBA - 1))
 			return -EINVAL;
-		return addr;
+		goto found_addr;
 	}
 
 	if (len > TASK_SIZE)
@@ -102,13 +109,13 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 		vma = find_vma(mm, addr);
 		if (TASK_SIZE - len >= addr &&
 		    (!vma || addr + len <= vma->vm_start))
-			return addr;
+			goto found_addr;
 	}
 	if (len > mm->cached_hole_size) {
-	        start_addr = addr = mm->free_area_cache;
+		start_addr = addr = mm->free_area_cache;
 	} else {
-	        start_addr = addr = mm->mmap_base;
-	        mm->cached_hole_size = 0;
+		start_addr = addr = mm->mmap_base;
+		mm->cached_hole_size = 0;
 	}
 
 full_search:
@@ -124,8 +131,8 @@ full_search:
 			 * Start a new search - just in case we missed
 			 * some holes.
 			 */
-			if (start_addr != TASK_UNMAPPED_BASE) {
-				start_addr = addr = TASK_UNMAPPED_BASE;
+			if (start_addr != mm->mmap_base) {
+				start_addr = addr = mm->mmap_base;
 				mm->cached_hole_size = 0;
 				goto full_search;
 			}
@@ -136,14 +143,31 @@ full_search:
 			 * Remember the place where we stopped the search:
 			 */
 			mm->free_area_cache = addr + len;
-			return addr;
+			goto found_addr;
 		}
 		if (addr + mm->cached_hole_size < vma->vm_start)
-		        mm->cached_hole_size = vma->vm_start - addr;
+			mm->cached_hole_size = vma->vm_start - addr;
 		addr = vma->vm_end;
 		if (do_align)
 			addr = COLOUR_ALIGN(addr, pgoff);
 	}
+
+  found_addr:
+#ifdef CONFIG_ARM_FCSE
+	{
+		unsigned long new_addr = fcse_check_mmap_addr(mm, start_addr,
+							      addr, len, flags);
+		if (new_addr != addr) {
+			addr = new_addr;
+			if (!(addr & ~PAGE_MASK)) {
+				start_addr = mm->mmap_base;
+				mm->cached_hole_size = 0;
+				goto full_search;
+			}
+		}
+	}
+#endif /* CONFIG_ARM_FCSE */
+	return addr;
 }
 
 unsigned long
