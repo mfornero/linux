@@ -55,7 +55,7 @@ extern void imx51_soc_init(void);
 extern void imx53_soc_init(void);
 extern void imx51_init_late(void);
 extern void epit_timer_init(void __iomem *base, int irq);
-extern void mxc_timer_init(void __iomem *, int);
+extern void mxc_timer_init(void __iomem *, unsigned long, int);
 extern int mx1_clocks_init(unsigned long fref);
 extern int mx21_clocks_init(unsigned long lref, unsigned long fref);
 extern int mx25_clocks_init(void);
@@ -154,6 +154,10 @@ static inline void imx6q_pm_init(void) {}
 extern int mx51_neon_fixup(void);
 #else
 static inline int mx51_neon_fixup(void) { return 0; }
+#endif
+
+#ifdef CONFIG_IPIPE
+void ipipe_mach_allow_hwtimer_uaccess(unsigned long aips1, unsigned long aips2);
 #endif
 
 #endif

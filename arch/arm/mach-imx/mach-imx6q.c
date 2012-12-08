@@ -166,6 +166,10 @@ static void __init imx6q_timer_init(void)
 {
 	mx6q_clocks_init();
 	twd_local_timer_of_register();
+#ifdef CONFIG_IPIPE
+	extern void __init mx6_pic_muter_register(void);
+	mx6_pic_muter_register();
+#endif /* CONFIG_IPIPE */
 }
 
 static struct sys_timer imx6q_timer = {

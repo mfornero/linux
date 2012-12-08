@@ -26,6 +26,7 @@ struct exec_domain;
 
 #include <asm/types.h>
 #include <asm/domain.h>
+#include <ipipe/thread_info.h>
 
 typedef unsigned long mm_segment_t;
 
@@ -66,6 +67,8 @@ struct thread_info {
 	unsigned long		thumbee_state;	/* ThumbEE Handler Base register */
 #endif
 	struct restart_block	restart_block;
+
+	struct ipipe_threadinfo ipipe_data;
 };
 
 #define INIT_THREAD_INFO(tsk)						\
@@ -154,6 +157,12 @@ extern int vfp_restore_user_hwstate(struct user_vfp __user *,
 #define TIF_RESTORE_SIGMASK	20
 #define TIF_SECCOMP		21
 #define TIF_SWITCH_MM		22	/* deferred switch_mm */
+#ifdef CONFIG_IPIPE
+#define TIF_MMSWITCH_INT	23
+#ifdef CONFIG_ARM_FCSE
+#define TIF_SWITCHED		24
+#endif /* CONFIG_ARM_FCSE */
+#endif /* CONFIG_IPIPE */
 
 #define _TIF_SIGPENDING		(1 << TIF_SIGPENDING)
 #define _TIF_NEED_RESCHED	(1 << TIF_NEED_RESCHED)
@@ -163,6 +172,12 @@ extern int vfp_restore_user_hwstate(struct user_vfp __user *,
 #define _TIF_POLLING_NRFLAG	(1 << TIF_POLLING_NRFLAG)
 #define _TIF_USING_IWMMXT	(1 << TIF_USING_IWMMXT)
 #define _TIF_SECCOMP		(1 << TIF_SECCOMP)
+#ifdef CONFIG_IPIPE
+#define _TIF_MMSWITCH_INT	(1 << TIF_MMSWITCH_INT)
+#ifdef CONFIG_ARM_FCSE
+#define _TIF_SWITCHED		(1 << TIF_SWITCHED)
+#endif /* CONFIG_ARM_FCSE */
+#endif /* CONFIG_IPIPE */
 
 /* Checks for any syscall work in entry-common.S */
 #define _TIF_SYSCALL_WORK (_TIF_SYSCALL_TRACE | _TIF_SYSCALL_AUDIT)

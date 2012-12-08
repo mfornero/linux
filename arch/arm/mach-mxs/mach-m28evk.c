@@ -172,10 +172,6 @@ static const iomux_cfg_t m28evk_pads[] __initconst = {
 	MX28_PAD_PWM4__GPIO_3_29 |
 		(MXS_PAD_4MA | MXS_PAD_3V3 | MXS_PAD_NOPULL),
 
-	/* led */
-	MX28_PAD_PWM0__GPIO_3_16 | MXS_PAD_CTRL,
-	MX28_PAD_PWM1__GPIO_3_17 | MXS_PAD_CTRL,
-
 	/* nand */
 	MX28_PAD_GPMI_D00__GPMI_D0 |
 		(MXS_PAD_4MA | MXS_PAD_1V8 | MXS_PAD_NOPULL),

@@ -62,16 +62,22 @@ static inline void fcse_pid_set(unsigned long pid)
 			      : /* */: "r" (pid) : "cc", "memory");
 }
 
+static inline unsigned long fcse_pid_get(void)
+{
+	unsigned long pid;
+	__asm__ __volatile__ ("mrc p15, 0, %0, c13, c0, 0"
+			      : "=r"(pid) : /* */ : "cc", "memory");
+	return pid;
+}
+
 static inline unsigned long fcse_mva_to_va(unsigned long mva)
 {
 	unsigned long va;
 
 	if (!cache_is_vivt())
 		return mva;
-
-	__asm__ __volatile__ ("mrc p15, 0, %0, c13, c0, 0"
-			      : "=r"(va) : /* */ : "cc", "memory");
-	va ^= mva;
+	
+	va = fcse_pid_get() ^ mva;
 	return (va & 0xfe000000) ? mva : va;
 }
 

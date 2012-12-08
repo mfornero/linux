@@ -6,7 +6,11 @@
 #ifndef CONFIG_SPARSE_IRQ
 #include <mach/irqs.h>
 #else
+#ifndef CONFIG_IPIPE
 #define NR_IRQS NR_IRQS_LEGACY
+#else
+#define NR_IRQS 512
+#endif
 #endif
 
 #ifndef irq_canonicalize
@@ -33,4 +37,3 @@ void init_IRQ(void);
 #endif
 
 #endif
-

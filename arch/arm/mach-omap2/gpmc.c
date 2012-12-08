@@ -24,6 +24,7 @@
 #include <linux/io.h>
 #include <linux/module.h>
 #include <linux/interrupt.h>
+#include <linux/ipipe.h>
 
 #include <asm/mach-types.h>
 #include <plat/gpmc.h>
@@ -784,7 +785,7 @@ static irqreturn_t gpmc_handle_irq(int irq, void *dev)
 	/* check cs to invoke the irq */
 	cs = ((gpmc_read_reg(GPMC_PREFETCH_CONFIG1)) >> CS_NUM_SHIFT) & 0x7;
 	if (OMAP_GPMC_IRQ_BASE+cs <= OMAP_GPMC_IRQ_END)
-		generic_handle_irq(OMAP_GPMC_IRQ_BASE+cs);
+		ipipe_handle_demuxed_irq(OMAP_GPMC_IRQ_BASE+cs);
 
 	return IRQ_HANDLED;
 }

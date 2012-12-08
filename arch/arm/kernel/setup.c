@@ -429,15 +429,22 @@ void cpu_init(void)
 	    : "r14");
 }
 
+#if NR_CPUS > 16
 int __cpu_logical_map[NR_CPUS];
+#else
+int __cpu_logical_map[16];
+#endif
 
 void __init smp_setup_processor_id(void)
 {
 	int i;
 	u32 cpu = is_smp() ? read_cpuid_mpidr() & 0xff : 0;
+	int max = cpu + 1 > NR_CPUS ? cpu + 1: NR_CPUS;
+
+	BUG_ON(max > ARRAY_SIZE(__cpu_logical_map));
 
 	cpu_logical_map(0) = cpu;
-	for (i = 1; i < NR_CPUS; ++i)
+	for (i = 1; i < max; ++i)
 		cpu_logical_map(i) = i == cpu ? 0 : i;
 
 	printk(KERN_INFO "Booting Linux on physical CPU %d\n", cpu);

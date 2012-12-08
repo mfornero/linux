@@ -5,6 +5,7 @@
 #include <linux/io.h>
 #include <linux/irqdomain.h>
 #include <linux/module.h>
+#include <linux/ipipe.h>
 
 #include <asm/exception.h>
 #include <asm/mach/irq.h>
@@ -66,7 +67,7 @@ static void fpga_irq_handle(unsigned int irq, struct irq_desc *desc)
 	do {
 		irq = ffs(status) - 1;
 		status &= ~(1 << irq);
-		generic_handle_irq(irq_find_mapping(f->domain, irq));
+		ipipe_handle_demuxed_irq(irq_find_mapping(f->domain, irq));
 	} while (status);
 }
 
@@ -141,6 +142,9 @@ void __init fpga_irq_init(void __iomem *base, const char *name, int irq_start,
 	f->chip.name = name;
 	f->chip.irq_ack = fpga_irq_mask;
 	f->chip.irq_mask = fpga_irq_mask;
+#ifdef CONFIG_IPIPE
+	f->chip.irq_mask_ack = fpga_irq_mask;
+#endif
 	f->chip.irq_unmask = fpga_irq_unmask;
 	f->valid = valid;
 

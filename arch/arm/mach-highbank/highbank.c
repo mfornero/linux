@@ -108,6 +108,7 @@ static void __init highbank_init_irq(void)
 static void __init highbank_timer_init(void)
 {
 	int irq;
+	struct resources res;
 	struct device_node *np;
 	void __iomem *timer_base;
 
@@ -121,9 +122,13 @@ static void __init highbank_timer_init(void)
 	WARN_ON(!timer_base);
 	irq = irq_of_parse_and_map(np, 0);
 
+	if (of_address_to_resource(np, 0, &res))
+		res.start = 0;
+
 	highbank_clocks_init();
 
-	sp804_clocksource_and_sched_clock_init(timer_base + 0x20, "timer1");
+	sp804_clocksource_and_sched_clock_init(timer_base + 0x20, 
+					       res.start + 0x20, "timer1");
 	sp804_clockevents_init(timer_base, irq, "timer0");
 
 	twd_local_timer_of_register();

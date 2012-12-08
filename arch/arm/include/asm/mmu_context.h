@@ -56,68 +56,73 @@ static inline void switch_new_context(struct mm_struct *mm)
 {
 	unsigned long flags;
 
-	__new_context(mm);
-
-	local_irq_save(flags);
-	cpu_switch_mm(mm->pgd, mm, fcse_switch_mm(mm));
-	local_irq_restore(flags);
-}
-
-static inline void check_and_switch_context(struct mm_struct *mm,
-					    struct task_struct *tsk)
-{
-	if (unlikely(mm->context.kvm_seq != init_mm.context.kvm_seq))
-		__check_kvm_seq(mm);
-
 	/*
 	 * Required during context switch to avoid speculative page table
 	 * walking with the wrong TTBR.
 	 */
 	cpu_set_reserved_ttbr0();
 
-	if (!((mm->context.id ^ cpu_last_asid) >> ASID_BITS))
+	__new_context(mm);
+
+	flags = hard_local_irq_save();
+	cpu_switch_mm(mm->pgd, mm, fcse_switch_mm(mm));
+	hard_local_irq_restore(flags);
+}
+
+static inline int check_and_switch_context(struct mm_struct *mm,
+					   struct task_struct *tsk,
+					   bool root_p)
+{
+	if (unlikely(mm->context.kvm_seq != init_mm.context.kvm_seq))
+		__check_kvm_seq(mm);
+
+	if (!((mm->context.id ^ cpu_last_asid) >> ASID_BITS)) {
+		/*
+		 * Required during context switch to avoid speculative
+		 * page table walking with the wrong TTBR.
+		 */
+		cpu_set_reserved_ttbr0();
+
 		/*
 		 * The ASID is from the current generation, just switch to the
 		 * new pgd. This condition is only true for calls from
 		 * context_switch() and interrupts are already disabled.
 		 */
 		cpu_switch_mm(mm->pgd, mm, fcse_switch_mm(mm));
-	else if (irqs_disabled())
+	} else if (root_p && irqs_disabled()) {
 		/*
 		 * Defer the new ASID allocation until after the context
 		 * switch critical region since __new_context() cannot be
 		 * called with interrupts disabled (it sends IPIs).
 		 */
 		set_ti_thread_flag(task_thread_info(tsk), TIF_SWITCH_MM);
-	else
+		return -EAGAIN;
+	} else
 		/*
 		 * That is a direct call to switch_mm() or activate_mm() with
 		 * interrupts enabled and a new context.
 		 */
 		switch_new_context(mm);
+
+	return 0;
 }
 
 #define init_new_context(tsk,mm)	(__init_new_context(tsk,mm),0)
 
-#define finish_arch_post_lock_switch \
-	finish_arch_post_lock_switch
-static inline void finish_arch_post_lock_switch(void)
-{
-	if (test_and_clear_thread_flag(TIF_SWITCH_MM))
-		switch_new_context(current->mm);
-}
+#define __deferred_switch_mm(mm)	switch_new_context(mm)
 
 #else	/* !CONFIG_CPU_HAS_ASID */
 
 #ifdef CONFIG_MMU
 
-static inline void check_and_switch_context(struct mm_struct *mm,
-					    struct task_struct *tsk)
+static inline int check_and_switch_context(struct mm_struct *mm,
+					   struct task_struct *tsk, 
+					   const bool root_p)
 {
 	if (unlikely(mm->context.kvm_seq != init_mm.context.kvm_seq))
 		__check_kvm_seq(mm);
 
-	if (irqs_disabled())
+	if (root_p && irqs_disabled()) {
 		/*
 		 * cpu_switch_mm() needs to flush the VIVT caches. To avoid
 		 * high interrupt latencies, defer the call and continue
@@ -126,18 +131,16 @@ static inline void check_and_switch_context(struct mm_struct *mm,
 		 * finish_arch_post_lock_switch() call.
 		 */
 		set_ti_thread_flag(task_thread_info(tsk), TIF_SWITCH_MM);
-	else
+		return -EAGAIN;
+	} else
 		cpu_switch_mm(mm->pgd, mm, fcse_switch_mm(mm));
+
+	return 0;
 }
 
-#define finish_arch_post_lock_switch \
-	finish_arch_post_lock_switch
-static inline void finish_arch_post_lock_switch(void)
+static inline void __deferred_switch_mm(struct mm_struct *next)
 {
-	if (test_and_clear_thread_flag(TIF_SWITCH_MM)) {
-		struct mm_struct *mm = current->mm;
-		cpu_switch_mm(mm->pgd, mm, fcse_switch_mm(mm));
-	}
+	cpu_switch_mm(next->pgd, next, fcse_switch_mm(next));
 }
 
 #endif	/* CONFIG_MMU */
@@ -174,6 +177,7 @@ init_new_context(struct task_struct *tsk, struct mm_struct *mm)
 		return fcse_pid;
 	}
 	mm->context.fcse.pid = fcse_pid << FCSE_PID_SHIFT;
+
 #endif /* CONFIG_ARM_FCSE_GUARANTEED */
 	FCSE_BUG_ON(fcse_mm_in_cache(mm));
 #endif /* CONFIG_ARM_FCSE */
@@ -215,12 +219,13 @@ enter_lazy_tlb(struct mm_struct *mm, struct task_struct *tsk)
  * calling the CPU specific function when the mm hasn't
  * actually changed.
  */
-static inline void
-switch_mm(struct mm_struct *prev, struct mm_struct *next,
-	  struct task_struct *tsk)
+static inline int
+__do_switch_mm(struct mm_struct *prev, struct mm_struct *next,
+	       struct task_struct *tsk, bool root_p)
 {
+	int rc = 0;
 #ifdef CONFIG_MMU
-	unsigned int cpu = smp_processor_id();
+	const unsigned int cpu = ipipe_processor_id();
 
 #ifdef CONFIG_SMP
 	/* check for possible thread migration */
@@ -232,22 +237,78 @@ switch_mm(struct mm_struct *prev, struct mm_struct *next,
 #ifdef CONFIG_SMP
 		per_cpu(current_mm, cpu) = next;
 #endif
-		check_and_switch_context(next, tsk);
-		if (cache_is_vivt())
+		rc = check_and_switch_context(next, tsk, root_p);
+#if defined(CONFIG_IPIPE) && defined(CONFIG_ARM_FCSE)
+		if (tsk)
+			set_tsk_thread_flag(tsk, TIF_SWITCHED);
+#endif /* CONFIG_IPIPE && CONFIG_ARM_FCSE */
+		if (cache_is_vivt() && prev && prev != next)
 			cpumask_clear_cpu(cpu, mm_cpumask(prev));
 	} else
 		fcse_mark_dirty(next);
-#endif
+#endif /* CONFIG_MMU */
+	return rc;
+}
+
+#if defined(CONFIG_IPIPE) && defined(CONFIG_MMU)
+extern void __switch_mm_inner(struct mm_struct *prev, struct mm_struct *next,
+			      struct task_struct *tsk);
+
+extern void deferred_switch_mm(struct mm_struct *mm);
+#else /* !I-pipe || !MMU */
+#define __switch_mm_inner(prev, next, tsk) __do_switch_mm(prev, next, tsk, true)
+
+#define deferred_switch_mm(mm) __deferred_switch_mm(mm)
+#endif /* !I-pipe  || !MMU */
+
+#ifdef CONFIG_MMU
+#define finish_arch_post_lock_switch \
+	finish_arch_post_lock_switch
+static inline void finish_arch_post_lock_switch(void)
+{
+	if (test_and_clear_thread_flag(TIF_SWITCH_MM)) {
+		unsigned long flags;
+		ipipe_mm_switch_protect(flags);
+		deferred_switch_mm(current->mm);
+		ipipe_mm_switch_unprotect(flags);
+}
+}
+#endif /* CONFIG_MMU */
+
+static inline void 
+ipipe_switch_mm_head(struct mm_struct *prev, struct mm_struct *next,
+			   struct task_struct *tsk)
+{
+	__do_switch_mm(prev, next, tsk, false);
+}
+
+static inline void 
+__switch_mm(struct mm_struct *prev, struct mm_struct *next,
+	    struct task_struct *tsk)
+{
+	__switch_mm_inner(prev, next, tsk);
+}
+
+static inline void
+switch_mm(struct mm_struct *prev, struct mm_struct *next,
+	  struct task_struct *tsk)
+{
+#ifdef CONFIG_MMU
+	unsigned long flags;
+	ipipe_mm_switch_protect(flags);
+	__switch_mm(prev, next, tsk);
+	ipipe_mm_switch_unprotect(flags);
+#endif /* CONFIG_MMU */
 }
 
 #define deactivate_mm(tsk,mm)	do { } while (0)
 
 #ifndef CONFIG_ARM_FCSE_BEST_EFFORT
-#define activate_mm(prev,next) switch_mm(prev, next, NULL)
+#define activate_mm(prev,next) __switch_mm(prev, next, NULL)
 #else /* CONFIG_ARM_FCSE_BEST_EFFORT */
 #define activate_mm(prev,next)                                         \
        ({                                                              \
-       switch_mm(prev, next, NULL);                                    \
+       __switch_mm(prev, next, NULL);                                    \
        FCSE_BUG_ON(current->mm == next && !fcse_mm_in_cache(next));    \
        })
 #endif /* CONFIG_ARM_FCSE_BEST_EFFORT */

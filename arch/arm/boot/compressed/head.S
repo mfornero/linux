@@ -1190,6 +1190,15 @@ memdump:	mov	r12, r0
 		mov	pc, r10
 #endif
 
+#ifdef CONFIG_IPIPE_TRACE_MCOUNT
+		.text
+		.align 0
+		.type mcount %function
+		.global mcount
+mcount:
+		mov pc, lr	@ just return
+#endif
+
 		.ltorg
 reloc_code_end:
 

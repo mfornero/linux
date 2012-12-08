@@ -15,10 +15,11 @@
 #include <linux/io.h>
 #include <linux/irq.h>
 #include <linux/spinlock.h>
+#include <linux/ipipe.h>
 #include <plat/shirq.h>
 
 struct spear_shirq *shirq;
-static DEFINE_SPINLOCK(lock);
+static IPIPE_DEFINE_SPINLOCK(lock);
 
 static void shirq_irq_mask(struct irq_data *d)
 {
@@ -62,6 +63,9 @@ static struct irq_chip shirq_chip = {
 	.name		= "spear_shirq",
 	.irq_ack	= shirq_irq_mask,
 	.irq_mask	= shirq_irq_mask,
+#ifdef CONFIG_IPIPE
+	.irq_mask_ack   = shirq_irq_mask,
+#endif /* CONFIG_IPIPE */
 	.irq_unmask	= shirq_irq_unmask,
 };
 
@@ -77,7 +81,7 @@ static void shirq_handler(unsigned irq, struct irq_desc *desc)
 			if (!(shirq->dev_config[i].status_mask & val))
 				continue;
 
-			generic_handle_irq(shirq->dev_config[i].virq);
+			ipipe_handle_demuxed_irq(shirq->dev_config[i].virq);
 
 			/* clear interrupt */
 			val &= ~shirq->dev_config[i].status_mask;

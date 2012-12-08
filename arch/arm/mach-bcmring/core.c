@@ -188,10 +188,10 @@ void __init bcmring_amba_init(void)
 static int __init bcmring_clocksource_init(void)
 {
 	/* setup timer1 as free-running clocksource */
-	sp804_clocksource_init(TIMER1_VA_BASE, "timer1");
+	sp804_clocksource_init(TIMER1_VA_BASE, MM_ADDR_IO_TMR + 0x20, "timer1");
 
 	/* setup timer3 as free-running clocksource */
-	sp804_clocksource_init(TIMER3_VA_BASE, "timer3");
+	sp804_clocksource_init(TIMER3_VA_BASE, MM_ADDR_IO_TMR + 0x60, "timer3");
 
 	return 0;
 }

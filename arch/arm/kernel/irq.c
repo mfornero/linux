@@ -85,8 +85,10 @@ void handle_IRQ(unsigned int irq, struct pt_regs *regs)
 		generic_handle_irq(irq);
 	}
 
+#ifndef CONFIG_IPIPE
 	/* AT91 specific workaround */
 	irq_finish(irq);
+#endif /* !CONFIG_IPIPE */
 
 	irq_exit();
 	set_irq_regs(old_regs);

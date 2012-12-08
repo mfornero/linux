@@ -22,6 +22,7 @@
 #include <linux/err.h>
 #include <linux/platform_device.h>
 #include <mach/common.h>
+#include <mach/hardware.h>
 
 struct device mxc_aips_bus = {
 	.init_name	= "mxc_aips",
@@ -47,3 +48,24 @@ done:
 	return ret;
 }
 core_initcall(mxc_device_init);
+
+static int post_cpu_init(void)
+{
+#ifdef CONFIG_MACH_MX27
+	if (cpu_is_mx27())
+		ipipe_mach_allow_hwtimer_uaccess(MX27_IO_P2V(MX27_AIPI_BASE_ADDR), 3);
+#endif /* CONFIG_MACH_MX27 */
+#ifdef CONFIG_MACH_MX25
+	if (cpu_is_mx25())
+		ipipe_mach_allow_hwtimer_uaccess(MX25_AIPS1_BASE_ADDR_VIRT,
+						 MX25_AIPS2_BASE_ADDR_VIRT);
+#endif /* CONFIG_MACH_MX25 */
+#ifdef CONFIG_MACH_MX31
+	if (cpu_is_mx31())
+		ipipe_mach_allow_hwtimer_uaccess(AIPS1_BASE_ADDR_VIRT,
+						 AIPS2_BASE_ADDR_VIRT);
+#endif /* CONFIG_MACH_MX31 */
+	return 0;
+}
+
+postcore_initcall(post_cpu_init);

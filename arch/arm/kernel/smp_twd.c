@@ -22,19 +22,91 @@
 #include <linux/io.h>
 #include <linux/of_irq.h>
 #include <linux/of_address.h>
+#include <linux/ipipe_tickdev.h>
 
 #include <asm/smp_twd.h>
 #include <asm/localtimer.h>
 #include <asm/hardware/gic.h>
+#include <asm/ipipe.h>
 
 /* set up by the platform code */
 static void __iomem *twd_base;
+static struct clk *twd_clk;
 
 static struct clk *twd_clk;
 static unsigned long twd_timer_rate;
 
 static struct clock_event_device __percpu **twd_evt;
 static int twd_ppi;
+
+#if defined(CONFIG_IPIPE) && defined(CONFIG_SMP)
+static DEFINE_PER_CPU(struct ipipe_timer, twd_itimer);
+
+void __iomem *gt_base;
+
+static void twd_ack(void)
+{
+	writel_relaxed(1, twd_base + TWD_TIMER_INTSTAT);
+}
+
+static struct __ipipe_tscinfo tsc_info;
+
+static struct clk *__cpuinit twd_get_clock(void);
+static void __cpuinit twd_calibrate_rate(void);
+
+static void __cpuinit gt_setup(unsigned long base_paddr, unsigned bits)
+{
+	twd_clk = twd_get_clock();
+
+	if (!IS_ERR_OR_NULL(twd_clk))
+		twd_timer_rate = clk_get_rate(twd_clk);
+	else
+		twd_calibrate_rate();
+
+	gt_base = ioremap(base_paddr, SZ_256);
+	BUG_ON(!gt_base);
+
+	/* Start global timer */
+	__raw_writel(1, gt_base + 0x8);
+
+	tsc_info.type = IPIPE_TSC_TYPE_FREERUNNING;
+	tsc_info.freq = twd_timer_rate;
+	tsc_info.counter_vaddr = (unsigned long)gt_base;
+	tsc_info.u.counter_paddr = base_paddr;
+	
+	switch(bits) {
+	case 64:
+		tsc_info.u.mask = 0xffffffffffffffffULL;
+		break;
+	case 32:
+		tsc_info.u.mask = 0xffffffff;
+		break;
+	default:
+		/* Only supported as a 32 bits or 64 bits */
+		BUG();
+	}
+
+	__ipipe_tsc_register(&tsc_info);
+}
+
+#ifdef CONFIG_IPIPE_DEBUG_INTERNAL
+
+static DEFINE_PER_CPU(int, irqs);
+
+void twd_hrtimer_debug(unsigned int irq) /* hw interrupt off */
+{
+	int cpu = ipipe_processor_id();
+
+	if ((++per_cpu(irqs, cpu) % HZ) == 0) {
+#if 0
+		__ipipe_serial_debug("%c", 'A' + cpu);
+#else
+		do { } while (0);
+#endif
+	}
+}
+#endif /* CONFIG_IPIPE_DEBUG_INTERNAL */
+#endif /* CONFIG_IPIPE && CONFIG_SMP */
 
 static void twd_set_mode(enum clock_event_mode mode,
 			struct clock_event_device *clk)
@@ -43,10 +115,9 @@ static void twd_set_mode(enum clock_event_mode mode,
 
 	switch (mode) {
 	case CLOCK_EVT_MODE_PERIODIC:
-		/* timer load already set up */
 		ctrl = TWD_TIMER_CONTROL_ENABLE | TWD_TIMER_CONTROL_IT_ENABLE
 			| TWD_TIMER_CONTROL_PERIODIC;
-		__raw_writel(twd_timer_rate / HZ, twd_base + TWD_TIMER_LOAD);
+		__raw_writel((twd_timer_rate + HZ / 2) / HZ, twd_base + TWD_TIMER_LOAD);
 		break;
 	case CLOCK_EVT_MODE_ONESHOT:
 		/* period set, and timer enabled in 'next_event' hook */
@@ -185,7 +256,12 @@ static irqreturn_t twd_handler(int irq, void *dev_id)
 {
 	struct clock_event_device *evt = *(struct clock_event_device **)dev_id;
 
+	if (clockevent_ipipe_stolen(evt))
+		goto handle;
+
 	if (twd_timer_ack()) {
+	  handle:
+		__ipipe_tsc_update();
 		evt->event_handler(evt);
 		return IRQ_HANDLED;
 	}
@@ -193,7 +269,7 @@ static irqreturn_t twd_handler(int irq, void *dev_id)
 	return IRQ_NONE;
 }
 
-static struct clk *twd_get_clock(void)
+static struct clk *__cpuinit twd_get_clock(void)
 {
 	struct clk *clk;
 	int err;
@@ -229,6 +305,7 @@ static int __cpuinit twd_timer_setup(struct clock_event_device *clk)
 {
 	struct clock_event_device **this_cpu_clk;
 
+#ifndef CONFIG_IPIPE
 	if (!twd_clk)
 		twd_clk = twd_get_clock();
 
@@ -236,6 +313,7 @@ static int __cpuinit twd_timer_setup(struct clock_event_device *clk)
 		twd_timer_rate = clk_get_rate(twd_clk);
 	else
 		twd_calibrate_rate();
+#endif
 
 	__raw_writel(0, twd_base + TWD_TIMER_CONTROL);
 
@@ -246,6 +324,16 @@ static int __cpuinit twd_timer_setup(struct clock_event_device *clk)
 	clk->set_mode = twd_set_mode;
 	clk->set_next_event = twd_set_next_event;
 	clk->irq = twd_ppi;
+
+#if defined(CONFIG_IPIPE) && defined(CONFIG_SMP)
+	printk(KERN_INFO "I-pipe, %lu.%03lu MHz timer\n",
+	       twd_timer_rate / 1000000,
+	       (twd_timer_rate % 1000000) / 1000);
+	clk->ipipe_timer = __this_cpu_ptr(&twd_itimer);
+	clk->ipipe_timer->irq = clk->irq;
+	clk->ipipe_timer->ack = twd_ack;
+	clk->ipipe_timer->min_delay_ticks = 0xf;
+#endif
 
 	this_cpu_clk = __this_cpu_ptr(twd_evt);
 	*this_cpu_clk = clk;
@@ -282,6 +370,10 @@ static int __init twd_local_timer_common_register(void)
 	if (err)
 		goto out_irq;
 
+#ifdef CONFIG_IPIPE_DEBUG_INTERNAL
+	__ipipe_mach_hrtimer_debug = &twd_hrtimer_debug;
+#endif /* CONFIG_IPIPE_DEBUG_INTERNAL */
+
 	return 0;
 
 out_irq:
@@ -304,6 +396,10 @@ int __init twd_local_timer_register(struct twd_local_timer *tlt)
 	twd_base = ioremap(tlt->res[0].start, resource_size(&tlt->res[0]));
 	if (!twd_base)
 		return -ENOMEM;
+
+#ifdef CONFIG_IPIPE
+	gt_setup(tlt->res[0].start - 0x400, 32);
+#endif
 
 	return twd_local_timer_common_register();
 }
@@ -338,6 +434,17 @@ void __init twd_local_timer_of_register(void)
 		err = -ENOMEM;
 		goto out;
 	}
+
+#ifdef CONFIG_IPIPE
+	{
+		struct resource res;
+		
+		if (of_address_to_resource(np, 0, &res))
+			res.start = 0;
+		
+		gt_setup(res.start - 0x400, 32);
+	}
+#endif /* CONFIG_IPIPE */
 
 	err = twd_local_timer_common_register();
 

@@ -12,15 +12,51 @@
 #include <linux/mm.h>
 #include <linux/smp.h>
 #include <linux/percpu.h>
+#include <linux/module.h>
 
 #include <asm/mmu_context.h>
 #include <asm/tlbflush.h>
 
-static DEFINE_RAW_SPINLOCK(cpu_asid_lock);
+static IPIPE_DEFINE_SPINLOCK(cpu_asid_lock);
 unsigned int cpu_last_asid = ASID_FIRST_VERSION;
 #ifdef CONFIG_SMP
 DEFINE_PER_CPU(struct mm_struct *, current_mm);
 #endif
+
+#if defined(CONFIG_IPIPE) && defined(CONFIG_SMP)
+/*
+ * We shall be able to serve interrupts while attempting to grab the
+ * ASID lock on entry to __new_context(). This is a prerequisite for
+ * broadcasting VNMIs to other CPUs later on, to have them reset their
+ * current ASID, without risking deadlocks. I.e. each CPU shall be
+ * able to reset the current ASID upon a remote request, while trying
+ * to get a new ASID.
+ */
+#define asid_lock(flags)						\
+	do {								\
+		WARN_ON_ONCE(hard_irqs_disabled());			\
+		while (!spin_trylock_irqsave(&cpu_asid_lock, (flags)))	\
+			cpu_relax();					\
+	} while (0)							\
+
+#define asid_unlock(flags)	\
+	spin_unlock_irqrestore(&cpu_asid_lock, flags)
+
+#define asid_broadcast_reset()	\
+	__ipipe_send_vnmi(reset_context, *cpu_online_mask, NULL);
+
+#else /* !(CONFIG_IPIPE && CONFIG_SMP) */
+
+#define asid_lock(flags)	\
+	spin_lock_irqsave_cond(&cpu_asid_lock, flags)
+
+#define asid_unlock(flags)	\
+	spin_unlock_irqrestore_cond(&cpu_asid_lock, flags)
+
+#define asid_broadcast_reset()	\
+	smp_call_function(reset_context, NULL, 1);
+
+#endif /* !(CONFIG_IPIPE && CONFIG_SMP) */
 
 #ifdef CONFIG_ARM_LPAE
 void cpu_set_reserved_ttbr0(void)
@@ -97,7 +133,7 @@ static void set_mm_context(struct mm_struct *mm, unsigned int asid)
 	/*
 	 * Set the mm_cpumask(mm) bit for the current CPU.
 	 */
-	cpumask_set_cpu(smp_processor_id(), mm_cpumask(mm));
+	cpumask_set_cpu(ipipe_processor_id(), mm_cpumask(mm));
 }
 
 /*
@@ -107,7 +143,7 @@ static void set_mm_context(struct mm_struct *mm, unsigned int asid)
 static void reset_context(void *info)
 {
 	unsigned int asid;
-	unsigned int cpu = smp_processor_id();
+	unsigned int cpu = ipipe_processor_id();
 	struct mm_struct *mm = per_cpu(current_mm, cpu);
 
 	/*
@@ -124,7 +160,7 @@ static void reset_context(void *info)
 	set_mm_context(mm, asid);
 
 	/* set the new ASID */
-	cpu_switch_mm(mm->pgd, mm);
+	cpu_switch_mm(mm->pgd, mm, fcse_switch_mm(current));
 }
 
 #else
@@ -132,24 +168,26 @@ static void reset_context(void *info)
 static inline void set_mm_context(struct mm_struct *mm, unsigned int asid)
 {
 	mm->context.id = asid;
-	cpumask_copy(mm_cpumask(mm), cpumask_of(smp_processor_id()));
+	cpumask_copy(mm_cpumask(mm), cpumask_of(ipipe_processor_id()));
 }
 
 #endif
 
 void __new_context(struct mm_struct *mm)
 {
+	int cpu = ipipe_processor_id();
+	unsigned long flags;
 	unsigned int asid;
 
-	raw_spin_lock(&cpu_asid_lock);
+	asid_lock(flags);
 #ifdef CONFIG_SMP
 	/*
 	 * Check the ASID again, in case the change was broadcast from
 	 * another CPU before we acquired the lock.
 	 */
 	if (unlikely(((mm->context.id ^ cpu_last_asid) >> ASID_BITS) == 0)) {
-		cpumask_set_cpu(smp_processor_id(), mm_cpumask(mm));
-		raw_spin_unlock(&cpu_asid_lock);
+		cpumask_set_cpu(cpu, mm_cpumask(mm));
+		asid_unlock(flags);
 		return;
 	}
 #endif
@@ -167,15 +205,15 @@ void __new_context(struct mm_struct *mm)
 	 * to start a new version and flush the TLB.
 	 */
 	if (unlikely((asid & ~ASID_MASK) == 0)) {
-		asid = cpu_last_asid + smp_processor_id() + 1;
+		asid = cpu_last_asid + cpu + 1;
 		flush_context();
 #ifdef CONFIG_SMP
 		smp_wmb();
-		smp_call_function(reset_context, NULL, 1);
+		asid_broadcast_reset();
 #endif
 		cpu_last_asid += NR_CPUS;
 	}
 
 	set_mm_context(mm, asid);
-	raw_spin_unlock(&cpu_asid_lock);
+	asid_unlock(flags);
 }

@@ -343,6 +343,10 @@ static inline void __omap_dm_timer_reset(struct omap_dm_timer *timer,
 
 	if (autoidle)
 		l |= 0x1 << 0;
+#ifdef CONFIG_IPIPE
+	else
+		l = (0x3 << 8) | (l & (1 << 5)) | (0x1 << 3) | (l & (1 << 2));
+#endif /* CONFIG_IPIPE */
 
 	if (wakeup)
 		l |= 1 << 2;
@@ -421,6 +425,11 @@ static inline void __omap_dm_timer_write_status(struct omap_dm_timer *timer,
 						unsigned int value)
 {
 	__raw_writel(value, timer->irq_stat);
+}
+
+static inline unsigned long __omap_dm_timer_read_status(struct omap_dm_timer *timer)
+{
+	return __raw_readl(timer->irq_stat);
 }
 
 #endif /* __ASM_ARCH_DMTIMER_H */

@@ -130,6 +130,9 @@ static struct irq_chip at91_aic_chip = {
 	.name		= "AIC",
 	.irq_ack	= at91_aic_mask_irq,
 	.irq_mask	= at91_aic_mask_irq,
+#ifdef CONFIG_IPIPE
+	.irq_mask_ack   = at91_aic_mask_irq,
+#endif /* CONFIG_IPIPE */
 	.irq_unmask	= at91_aic_unmask_irq,
 	.irq_set_type	= at91_aic_set_type,
 	.irq_set_wake	= at91_aic_set_wake,

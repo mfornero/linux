@@ -21,6 +21,7 @@
 #include <linux/gpio.h>
 #include <linux/i2c.h>
 #include <linux/irq.h>
+#include <linux/ipipe.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -162,7 +163,7 @@ static void mx31ads_expio_irq_handler(u32 irq, struct irq_desc *desc)
 		if ((int_valid & 1) == 0)
 			continue;
 
-		generic_handle_irq(expio_irq);
+		ipipe_handle_demuxed_irq(expio_irq);
 	}
 }
 

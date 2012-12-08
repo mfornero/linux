@@ -11,7 +11,9 @@
 #ifndef __ASM_ARCH_MXC_IRQS_H__
 #define __ASM_ARCH_MXC_IRQS_H__
 
+#ifndef CONFIG_IPIPE
 #include <asm-generic/gpio.h>
+#endif
 
 /*
  * SoCs with GIC interrupt controller have 160 IRQs, those with TZIC
@@ -30,6 +32,9 @@
 
 #define MXC_GPIO_IRQ_START	MXC_INTERNAL_IRQS
 
+#ifndef ARCH_NR_GPIOS
+#define ARCH_NR_GPIOS 256
+#endif
 /*
  * The next 16 interrupts are for board specific purposes.  Since
  * the kernel can only run on one machine at a time, we can re-use
