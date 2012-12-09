@@ -23,6 +23,7 @@ config IPIPE_WANT_APIREV_2
 
 config IPIPE_TARGET_APIREV
        int
+       depends on IPIPE
        default 1 if IPIPE_WANT_APIREV_1
        default 2 if IPIPE_WANT_APIREV_2
        default 1 if IPIPE_LEGACY
