@@ -35,6 +35,11 @@ extern unsigned int cpu_khz;
 #define ipipe_tsc2ns(t)	(((t) * 1000UL) / (__ipipe_hrclock_freq / 1000000UL))
 #define ipipe_tsc2us(t)	((t) / (__ipipe_hrclock_freq / 1000000UL))
 
+static inline const char *ipipe_clock_name(void)
+{
+	return "tsc";
+}
+
 /* Private interface -- Internal use only */
 
 static inline unsigned long __ipipe_ffnz(unsigned long ul)
