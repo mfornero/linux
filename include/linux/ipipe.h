@@ -78,10 +78,13 @@ int __ipipe_pin_vma(struct mm_struct *mm, struct vm_area_struct *vma);
 		__ipipe_report_schedule(current, next);	\
 	} while(0)
 
+#ifndef ipipe_get_active_mm
 static inline struct mm_struct *ipipe_get_active_mm(void)
 {
 	return __this_cpu_read(ipipe_percpu.active_mm);
 }
+#define ipipe_get_active_mm ipipe_get_active_mm
+#endif
 
 #else /* !CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH */
 
@@ -91,7 +94,9 @@ static inline struct mm_struct *ipipe_get_active_mm(void)
 		hard_local_irq_disable();		\
 	} while(0)
 
-#define ipipe_get_active_mm()  (current->active_mm)
+#ifndef ipipe_get_active_mm
+#define ipipe_get_active_mm()	(current->active_mm)
+#endif
 
 #endif /* !CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH */
 
