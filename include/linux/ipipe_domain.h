@@ -102,7 +102,7 @@ struct ipipe_percpu_data {
 	struct task_struct *rqlock_owner;
 	struct ipipe_vm_notifier *vm_notifier;
 	unsigned long nmi_state;
-#ifdef CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH
+#ifdef CONFIG_IPIPE_WANT_ACTIVE_MM
 	struct mm_struct *active_mm;
 #endif
 #ifdef CONFIG_IPIPE_DEBUG_CONTEXT

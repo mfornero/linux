@@ -121,6 +121,8 @@ extern void (*__ipipe_mach_hrtimer_debug)(unsigned irq);
 
 #endif /* !CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH */
 
+#define ipipe_get_active_mm()	(__this_cpu_read(ipipe_percpu.active_mm))
+
 #define ipipe_read_tsc(t)	do { t = __ipipe_tsc_get(); } while(0)
 #define __ipipe_read_timebase()	__ipipe_tsc_get()
 
