@@ -51,6 +51,8 @@
 #endif	/* CONFIG_X86_LOCAL_APIC */
 #include <asm/traps.h>
 #include <asm/tsc.h>
+#include <asm/i387.h>
+#include <asm/fpu-internal.h>
 
 DEFINE_PER_CPU(unsigned long, __ipipe_cr2);
 EXPORT_PER_CPU_SYMBOL_GPL(__ipipe_cr2);
@@ -646,6 +648,7 @@ struct task_struct *__switch_to(struct task_struct *prev_p,
 				struct task_struct *next_p);
 EXPORT_SYMBOL_GPL(__switch_to);
 EXPORT_SYMBOL_GPL(show_stack);
+EXPORT_PER_CPU_SYMBOL_GPL(fpu_owner_task);
 
 EXPORT_PER_CPU_SYMBOL_GPL(init_tss);
 #ifdef CONFIG_SMP
