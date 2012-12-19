@@ -551,6 +551,7 @@ EXPORT_SYMBOL_GPL(__ipipe_serial_debug);
 
 #endif
 
+EXPORT_SYMBOL_GPL(do_munmap);
 EXPORT_SYMBOL_GPL(show_stack);
 EXPORT_SYMBOL_GPL(init_mm);
 #ifndef MULTI_CPU
@@ -568,8 +569,10 @@ EXPORT_SYMBOL_GPL(irq_desc);
 #ifdef CONFIG_CPU_HAS_ASID
 EXPORT_SYMBOL_GPL(__new_context);
 EXPORT_SYMBOL_GPL(cpu_last_asid);
+EXPORT_SYMBOL_GPL(cpu_set_reserved_ttbr0);
 #endif /* CONFIG_CPU_HAS_ASID */
 
 #ifdef CONFIG_SMP
 EXPORT_SYMBOL_GPL(__cpu_logical_map);
 #endif /* CONFIG_IPIPE */
+

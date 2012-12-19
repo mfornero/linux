@@ -423,6 +423,7 @@ static void ipi_timer(void)
 #define IPIPE_IPI_BASE	IPIPE_VIRQ_BASE
 
 unsigned __ipipe_first_ipi;
+EXPORT_SYMBOL_GPL(__ipipe_first_ipi);
 
 static void  __ipipe_root_ipi(unsigned virq, void *cookie)
 {

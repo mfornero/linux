@@ -451,6 +451,7 @@ void __ipipe_pin_range_globally(unsigned long start, unsigned long end)
 EXPORT_SYMBOL_GPL(last_task_used_math);
 #endif
 
+EXPORT_SYMBOL_GPL(do_munmap);
 EXPORT_SYMBOL_GPL(__switch_to);
 EXPORT_SYMBOL_GPL(show_stack);
 EXPORT_SYMBOL_GPL(_switch);
