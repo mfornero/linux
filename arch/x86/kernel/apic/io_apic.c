@@ -377,8 +377,6 @@ static struct IO_APIC_route_entry __ioapic_read_entry(int apic, int pin)
 	return eu.entry;
 }
 
-#if !defined(CONFIG_IPIPE) || defined(CONFIG_SMP)
-
 static struct IO_APIC_route_entry ioapic_read_entry(int apic, int pin)
 {
 	union entry_union eu;
@@ -402,7 +400,6 @@ static void __ioapic_write_entry(int apic, int pin, struct IO_APIC_route_entry e
 	union entry_union eu = {{0, 0}};
 
 	eu.entry = e;
-#endif /* !CONFIG_IPIPE || CONFIG_SMP */
 
 	io_apic_write(apic, 0x11 + 2*pin, eu.w2);
 	io_apic_write(apic, 0x10 + 2*pin, eu.w1);
@@ -2412,7 +2409,7 @@ static void ack_apic_edge(struct irq_data *data)
 
 atomic_t irq_mis_count;
 
-#if defined(CONFIG_GENERIC_PENDING_IRQ) || defined(CONFIG_IPIPE)
+#if defined(CONFIG_GENERIC_PENDING_IRQ) || (defined(CONFIG_IPIPE) && defined(CONFIG_SMP))
 static bool io_apic_level_ack_pending(struct irq_cfg *cfg)
 {
 	struct irq_pin_list *entry;
