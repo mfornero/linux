@@ -453,8 +453,10 @@ static void __ipipe_do_IRQ(unsigned irq, void *cookie)
 void __switch_mm_inner(struct mm_struct *prev, struct mm_struct *next,
 		       struct task_struct *tsk)
 {
+#ifdef CONFIG_IPIPE_WANT_ACTIVE_MM
 	struct mm_struct ** const active_mm =
 		__this_cpu_ptr(&ipipe_percpu.active_mm);
+#endif /* CONFIG_IPIPE_WANT_ACTIVE_MM */
 #ifdef CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH
 	struct thread_info *const tip = current_thread_info();
 	*active_mm = NULL;
@@ -480,15 +482,17 @@ void __switch_mm_inner(struct mm_struct *prev, struct mm_struct *next,
 		hard_local_irq_restore(flags);
 		prev = NULL;
 	}
-#else /* !CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH */
+#elif defined(CONFIG_IPIPE_WANT_ACTIVE_MM)
 	*active_mm = rc < 0 ? prev: next;
-#endif /* !CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH */
+#endif /* CONFIG_IPIPE_WANT_ACTIVE_MM */
 }
 
 void deferred_switch_mm(struct mm_struct *next)
 {
+#ifdef CONFIG_IPIPE_WANT_ACTIVE_MM
 	struct mm_struct ** const active_mm =
 		__this_cpu_ptr(&ipipe_percpu.active_mm);
+#endif /* CONFIG_IPIPE_WANT_ACTIVE_MM */
 #ifdef CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH
 	struct thread_info *const tip = current_thread_info();
 	*active_mm = NULL;
@@ -513,9 +517,9 @@ void deferred_switch_mm(struct mm_struct *next)
 		}
 		hard_local_irq_restore(flags);
 	}
-#else /* !CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH */
+#elif defined(CONFIG_IPIPE_WANT_ACTIVE_MM)
 	*active_mm = next;
-#endif /* !CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH */
+#endif /* CONFIG_IPIPE_WANT_ACTIVE_MM */
 }
 #endif /* CONFIG_MMU */
 
