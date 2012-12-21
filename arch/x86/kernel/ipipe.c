@@ -30,6 +30,7 @@
 #include <linux/irq.h>
 #include <linux/clockchips.h>
 #include <linux/kprobes.h>
+#include <linux/mm.h>
 #include <linux/ipipe_tickdev.h>
 #include <asm/asm-offsets.h>
 #include <asm/unistd.h>
@@ -646,6 +647,7 @@ EXPORT_SYMBOL_GPL(__ipipe_get_cs_tsc);
 
 struct task_struct *__switch_to(struct task_struct *prev_p,
 				struct task_struct *next_p);
+EXPORT_SYMBOL_GPL(do_munmap);
 EXPORT_SYMBOL_GPL(__switch_to);
 EXPORT_SYMBOL_GPL(show_stack);
 EXPORT_PER_CPU_SYMBOL_GPL(fpu_owner_task);
