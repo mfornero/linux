@@ -33,7 +33,7 @@
 
 /* 
  * The first virtual interrupt is reserved for the timer (see
- * __ipipe_init_platform). 
+ * __ipipe_early_core_setup).
  */
 #define IPIPE_TIMER_VIRQ	IPIPE_VIRQ_BASE
 

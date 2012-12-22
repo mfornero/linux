@@ -187,13 +187,13 @@ EXPORT_SYMBOL(ipipe_test_and_stall_root);
 
 #endif	/* CONFIG_SMP */
 
-void __ipipe_init_platform(void)
+void __ipipe_early_core_setup(void)
 {
 	unsigned int virq;
 	/*
 	 * Allocate all the virtual IRQs we need. We expect fixed virq
 	 * numbers starting at IPIPE_VIRQ_BASE, so we request them
-	 * early in init_platform().
+	 * early.
 	 */
 	virq = ipipe_alloc_virq();
 	BUG_ON(virq != IPIPE_TIMER_VIRQ);
@@ -235,7 +235,8 @@ void __ipipe_enable_pipeline(void)
 				  __ipipe_ack_irq);
 	/*
 	 * We use a virtual IRQ to handle the timer irq (decrementer
-	 * trap) which was allocated early in __ipipe_init_platform().
+	 * trap) which was allocated early in
+	 * __ipipe_early_core_setup().
 	 */
 	ipipe_request_irq(ipipe_root_domain,
 			  IPIPE_TIMER_VIRQ,

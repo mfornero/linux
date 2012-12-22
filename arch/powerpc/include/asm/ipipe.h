@@ -106,13 +106,12 @@ static inline const char *ipipe_clock_name(void)
 
 /* Private interface -- Internal use only */
 
-#define __ipipe_check_platform()		do { } while(0)
 #define __ipipe_enable_irq(irq)			enable_irq(irq)
 #define __ipipe_disable_irq(irq)		disable_irq(irq)
 #define __ipipe_enable_irqdesc(ipd, irq)	do { } while(0)
 #define __ipipe_disable_irqdesc(ipd, irq)	do { } while(0)
 
-void __ipipe_init_platform(void);
+void __ipipe_early_core_setup(void);
 
 void __ipipe_enable_pipeline(void);
 

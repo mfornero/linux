@@ -45,8 +45,7 @@ struct ipipe_arch_sysinfo {
 
 /* Private interface -- Internal use only */
 
-#define __ipipe_check_platform()	do { } while(0)
-#define __ipipe_init_platform()		do { } while(0)
+#define __ipipe_early_core_setup()	do { } while(0)
 
 #define __ipipe_enable_irq(irq)		irq_to_desc(irq)->chip->enable(irq)
 #define __ipipe_disable_irq(irq)	irq_to_desc(irq)->chip->disable(irq)

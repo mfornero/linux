@@ -146,7 +146,6 @@ static inline const char *ipipe_clock_name(void)
 
 /* Private interface -- Internal use only */
 
-#define __ipipe_check_platform()	do { } while(0)
 #define __ipipe_enable_irq(irq)		enable_irq(irq)
 #define __ipipe_disable_irq(irq)	disable_irq(irq)
 
@@ -181,7 +180,7 @@ static inline void ipipe_unmute_pic(void)
 #define ipipe_notify_root_preemption() do { } while(0)
 
 #ifdef CONFIG_SMP
-void __ipipe_init_platform(void);
+void __ipipe_early_core_setup(void);
 void __ipipe_hook_critical_ipi(struct ipipe_domain *ipd);
 void __ipipe_root_localtimer(unsigned int irq, void *cookie);
 void __ipipe_send_vnmi(void (*fn)(void *), cpumask_t cpumask, void *arg);
@@ -195,7 +194,7 @@ static inline void ipipe_handle_multi_ipi(int irq, struct pt_regs *regs)
 	__ipipe_grab_ipi(irq, regs);
 }
 #else /* !CONFIG_SMP */
-#define __ipipe_init_platform()		do { } while(0)
+#define __ipipe_early_core_setup()	do { } while(0)
 #define __ipipe_hook_critical_ipi(ipd)	do { } while(0)
 #endif /* !CONFIG_SMP */
 #ifndef __ipipe_mach_init_platform

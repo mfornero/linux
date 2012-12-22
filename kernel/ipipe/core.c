@@ -34,6 +34,7 @@
 #endif	/* CONFIG_PROC_FS */
 #include <linux/ipipe_trace.h>
 #include <linux/ipipe.h>
+#include <ipipe/setup.h>
 
 struct ipipe_domain ipipe_root;
 EXPORT_SYMBOL_GPL(ipipe_root);
@@ -293,21 +294,22 @@ void __init __ipipe_init_early(void)
 	fixup_percpu_data();
 
 	/*
-	 * Do the early init stuff. At this point, the kernel does not
-	 * provide much services yet: be careful.
-	 */
-	__ipipe_check_platform(); /* Do platform dependent checks first. */
-
-	/*
 	 * A lightweight registration code for the root domain. We are
 	 * running on the boot CPU, hw interrupts are off, and
 	 * secondary CPUs are still lost in space.
 	 */
-
 	ipd->name = "Linux";
 	ipd->context_offset = root_context_offset();
 	init_stage(ipd);
-	__ipipe_init_platform();
+
+	/*
+	 * Do the early init stuff. First we do the per-arch pipeline
+	 * core setup, then we run the per-client setup code. At this
+	 * point, the kernel does not provide much services yet: be
+	 * careful.
+	 */
+	__ipipe_early_core_setup();
+	__ipipe_early_client_setup();
 
 #ifdef CONFIG_PRINTK
 	__ipipe_printk_virq = ipipe_alloc_virq();
