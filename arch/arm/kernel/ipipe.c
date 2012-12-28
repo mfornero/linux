@@ -248,12 +248,6 @@ void ipipe_pic_muter_register(struct ipipe_mach_pic_muter *muter)
 
 void __ipipe_enable_irqdesc(struct ipipe_domain *ipd, unsigned irq)
 {
-	if (ipd != &ipipe_root) {
-		struct irq_desc *desc = irq_to_desc(irq);
-		if(desc && !desc->action)
-			enable_irq(irq);
-	}
-
 	if (ipipe_pic_muter.enable_irqdesc)
 		ipipe_pic_muter.enable_irqdesc(ipd, irq);
 }
@@ -263,12 +257,6 @@ void __ipipe_disable_irqdesc(struct ipipe_domain *ipd, unsigned irq)
 {
 	if (ipipe_pic_muter.disable_irqdesc)
 		ipipe_pic_muter.disable_irqdesc(ipd, irq);
-
-	if (ipd != &ipipe_root) {
-		struct irq_desc *desc = irq_to_desc(irq);
-		if(desc && !desc->action)
-			disable_irq(irq);
-	}
 }
 EXPORT_SYMBOL_GPL(__ipipe_disable_irqdesc);
 

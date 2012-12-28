@@ -313,31 +313,50 @@ static inline struct ipipe_threadinfo *ipipe_current_threadinfo(void)
 
 static inline void ipipe_enable_irq(unsigned int irq)
 {
-	struct irq_desc *desc = irq_to_desc(irq);
-	struct irq_chip *chip = irq_desc_get_chip(desc);
+	struct irq_desc *desc;
+	struct irq_chip *chip;
 
-	if (WARN_ON_ONCE(chip->irq_unmask == NULL))
+	desc = irq_to_desc(irq);
+	if (desc == NULL)
 		return;
 
-	chip->irq_unmask(&desc->irq_data);
+	chip = irq_desc_get_chip(desc);
+
+	if (WARN_ON_ONCE(chip->irq_enable == NULL && chip->irq_unmask == NULL))
+		return;
+
+	if (chip->irq_enable)
+		chip->irq_enable(&desc->irq_data);
+	else
+		chip->irq_unmask(&desc->irq_data);
 }
 
 static inline void ipipe_disable_irq(unsigned int irq)
 {
-	struct irq_desc *desc = irq_to_desc(irq);
-	struct irq_chip *chip = irq_desc_get_chip(desc);
+	struct irq_desc *desc;
+	struct irq_chip *chip;
 
-	if (WARN_ON_ONCE(chip->irq_mask == NULL))
+	desc = irq_to_desc(irq);
+	if (desc == NULL)
 		return;
 
-	chip->irq_mask(&desc->irq_data);
+	chip = irq_desc_get_chip(desc);
+
+	if (WARN_ON_ONCE(chip->irq_disable == NULL && chip->irq_mask == NULL))
+		return;
+
+	if (chip->irq_disable)
+		chip->irq_disable(&desc->irq_data);
+	else
+		chip->irq_mask(&desc->irq_data);
 }
 
 static inline void ipipe_end_irq(unsigned int irq)
 {
 	struct irq_desc *desc = irq_to_desc(irq);
 
-	desc->ipipe_end(irq, desc);
+	if (desc)
+		desc->ipipe_end(irq, desc);
 }
 
 static inline int ipipe_chained_irq_p(struct irq_desc *desc)

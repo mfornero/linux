@@ -330,6 +330,7 @@ int ipipe_timer_start(void (*tick_handler)(void),
 {
 	struct clock_event_device *evtdev;
 	struct ipipe_timer *timer;
+	struct irq_desc *desc;
 	unsigned long flags;
 	int steal, ret;
 
@@ -369,10 +370,10 @@ int ipipe_timer_start(void (*tick_handler)(void),
   done:
 	ipipe_critical_exit(flags);
 
-#ifdef CONFIG_GENERIC_CLOCKEVENTS
-	if (evtdev && evtdev->mode == CLOCK_EVT_MODE_UNUSED)
+	desc = irq_to_desc(timer->irq);
+	if (desc && irqd_irq_disabled(&desc->irq_data))
 		ipipe_enable_irq(timer->irq);
-#endif
+
 	return ret;
 }
 
@@ -381,15 +382,17 @@ void ipipe_timer_stop(unsigned cpu)
 	unsigned long __maybe_unused flags;
 	struct clock_event_device *evtdev;
 	struct ipipe_timer *timer;
+	struct irq_desc *desc;
 
 	timer = per_cpu(percpu_timer, cpu);
 	evtdev = timer->host_timer;
 
+	desc = irq_to_desc(timer->irq);
+	if (desc && irqd_irq_disabled(&desc->irq_data))
+		ipipe_disable_irq(timer->irq);
+
 #ifdef CONFIG_GENERIC_CLOCKEVENTS
 	if (evtdev) {
-		if (evtdev->mode == CLOCK_EVT_MODE_UNUSED)
-			ipipe_disable_irq(timer->irq);
-
 		flags = ipipe_critical_enter(NULL);
 
 		if (evtdev->ipipe_stolen) {
