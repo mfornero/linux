@@ -658,6 +658,11 @@ static void amd_e400_idle(void)
 			if (!boot_cpu_has(X86_FEATURE_NONSTOP_TSC))
 				mark_tsc_unstable("TSC halt in AMD C1E");
 			printk(KERN_INFO "System has AMD C1E enabled\n");
+#ifdef CONFIG_IPIPE
+			printk(KERN_INFO
+			       "I-pipe: will not be able to use LAPIC as a tick device\n"
+			       "I-pipe: disable C1E power state in your BIOS\n");
+#endif
 		}
 	}
 
