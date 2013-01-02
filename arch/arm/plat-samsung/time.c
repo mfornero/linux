@@ -364,6 +364,8 @@ static void s3c2410_timer_setup (void)
 
 #ifdef CONFIG_IPIPE
 	s3c2410_itimer.freq = tcnt * HZ;
+	/* hardware timer can't be reloaded below 120ns */
+	s3c2410_itimer.min_delay_ticks = ipipe_timer_ns2ticks(&s3c2410_itimer, 120);
 	ipipe_timer_register(&s3c2410_itimer);
 #endif /* CONFIG_IPIPE */
 }
