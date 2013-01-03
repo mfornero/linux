@@ -3090,7 +3090,7 @@ asmlinkage void __sched notrace preempt_schedule(void)
 	 * If there is a non-zero preempt_count or interrupts are disabled,
 	 * we do not want to preempt the current task. Just return..
 	 */
-	if (likely(ti->preempt_count || irqs_disabled()))
+	if (likely(ti->preempt_count || irqs_disabled() || !ipipe_root_p))
 		return;
 
 	do {
