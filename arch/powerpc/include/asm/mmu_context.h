@@ -218,11 +218,15 @@ void ipipe_switch_mm_head(struct mm_struct *prev, struct mm_struct *next,
  */
 static inline void activate_mm(struct mm_struct *prev, struct mm_struct *next)
 {
+#ifndef CONFIG_IPIPE
 	unsigned long flags;
 
 	local_irq_save(flags);
+#endif
 	__switch_mm(prev, next, current);
+#ifndef CONFIG_IPIPE
 	local_irq_restore(flags);
+#endif
 }
 
 /* We don't currently use enter_lazy_tlb() for anything */
