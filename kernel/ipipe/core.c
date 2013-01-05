@@ -1066,25 +1066,50 @@ void __weak ipipe_migration_hook(struct task_struct *p)
 {
 }
 
+#ifdef CONFIG_IPIPE_LEGACY
+
+static inline void complete_domain_migration(void) /* hw IRQs off */
+{
+	current->state &= ~TASK_HARDENING;
+}
+
+#else /* !CONFIG_IPIPE_LEGACY */
+
 static void complete_domain_migration(void) /* hw IRQs off */
 {
+	struct ipipe_percpu_domain_data *p;
 	struct ipipe_percpu_data *pd;
-	struct task_struct *p;
+	struct task_struct *t;
 
+	ipipe_root_only();
 	pd = __this_cpu_ptr(&ipipe_percpu);
-	p = pd->task_hijacked;
-	if (p) {
-		p->state &= ~TASK_HARDENING;
-		pd->task_hijacked = NULL;
-		ipipe_migration_hook(p);
-	}
+	t = pd->task_hijacked;
+	if (t == NULL)
+		return;
+
+	pd->task_hijacked = NULL;
+	t->state &= ~TASK_HARDENING;
+	if (t->state != TASK_INTERRUPTIBLE)
+		/* Migration aborted (by signal). */
+		return;
+
+	p = ipipe_this_cpu_head_context();
+	IPIPE_WARN_ONCE(test_bit(IPIPE_STALL_FLAG, &p->status));
+	/*
+	 * hw IRQs are disabled, but the completion hook assumes the
+	 * head domain is logically stalled: fix it up.
+	 */
+	__set_bit(IPIPE_STALL_FLAG, &p->status);
+	ipipe_migration_hook(t);
+	__clear_bit(IPIPE_STALL_FLAG, &p->status);
 }
+
+#endif /* !CONFIG_IPIPE_LEGACY */
 
 void __ipipe_complete_domain_migration(void)
 {
 	unsigned long flags;
 
-	ipipe_root_only();
 	flags = hard_local_irq_save();
 	complete_domain_migration();
 	hard_local_irq_restore(flags);
@@ -1099,12 +1124,8 @@ int __ipipe_switch_tail(void)
 	hard_local_irq_disable();
 #endif
 	x = __ipipe_root_p;
-
-#ifdef CONFIG_IPIPE_LEGACY
-	current->state &= ~TASK_HARDENING;
-#else
-	complete_domain_migration();
-#endif	/* !CONFIG_IPIPE_LEGACY */
+	if (x)
+		complete_domain_migration();
 
 #ifndef CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH
 	if (x)

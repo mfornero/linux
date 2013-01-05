@@ -8597,6 +8597,8 @@ int __ipipe_migrate_head(void)
 
 	preempt_disable();
 
+	IPIPE_WARN_ONCE(__this_cpu_read(ipipe_percpu.task_hijacked) != NULL);
+
 	__this_cpu_write(ipipe_percpu.task_hijacked, p);
 	set_current_state(TASK_INTERRUPTIBLE | TASK_HARDENING);
 	sched_submit_work(p);

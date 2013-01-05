@@ -68,6 +68,7 @@ int __ipipe_migrate_head(void);
 void __ipipe_reenter_root(void);
 
 int __ipipe_disable_ondemand_mappings(struct task_struct *p);
+
 int __ipipe_pin_vma(struct mm_struct *mm, struct vm_area_struct *vma);
 
 #ifdef CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH
