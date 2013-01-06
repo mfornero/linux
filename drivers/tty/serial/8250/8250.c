@@ -3057,7 +3057,35 @@ static int serial8250_resume(struct platform_device *dev)
 
 #if defined(CONFIG_IPIPE_DEBUG) && defined(CONFIG_SERIAL_8250_CONSOLE)
 
+static IPIPE_DEFINE_SPINLOCK(ipipe_8250_lock);
+
 #include <stdarg.h>
+
+static void wait_for_xmitr_nodelay(struct uart_8250_port *up, int bits)
+{
+	unsigned int status, tmout = 10000;
+
+	for (;;) {
+		status = serial_in(up, UART_LSR);
+
+		up->lsr_saved_flags |= status & LSR_SAVE_FLAGS;
+
+		if ((status & bits) == bits)
+			break;
+		if (--tmout == 0)
+			break;
+		cpu_relax();
+	}
+}
+
+static void serial8250_console_putchar_nodelay(struct uart_port *port, int ch)
+{
+	struct uart_8250_port *up =
+		container_of(port, struct uart_8250_port, port);
+
+	wait_for_xmitr_nodelay(up, UART_LSR_THRE);
+	serial_port_out(port, UART_TX, ch);
+}
 
 void __weak __ipipe_serial_debug(const char *fmt, ...)
 {
@@ -3079,7 +3107,7 @@ void __weak __ipipe_serial_debug(const char *fmt, ...)
 
         touch_nmi_watchdog();
 
-        flags = hard_local_irq_save();
+        spin_lock_irqsave(&ipipe_8250_lock, flags);
 
         /*
          *      First save the IER then disable the interrupts
@@ -3091,16 +3119,16 @@ void __weak __ipipe_serial_debug(const char *fmt, ...)
         else
                 serial_out(up, UART_IER, 0);
 
-        uart_console_write(&up->port, buf, count, serial8250_console_putchar);
+        uart_console_write(&up->port, buf, count, serial8250_console_putchar_nodelay);
 
         /*
          *      Finally, wait for transmitter to become empty
          *      and restore the IER
          */
-        wait_for_xmitr(up, BOTH_EMPTY);
+        wait_for_xmitr_nodelay(up, BOTH_EMPTY);
         serial_out(up, UART_IER, ier);
 
-        hard_local_irq_restore(flags);
+        spin_unlock_irqrestore(&ipipe_8250_lock, flags);
 }
 
 #endif
