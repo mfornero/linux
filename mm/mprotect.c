@@ -147,7 +147,6 @@ mprotect_fixup(struct vm_area_struct *vma, struct vm_area_struct **pprev,
 {
 	struct mm_struct *mm = vma->vm_mm;
 	unsigned long oldflags = vma->vm_flags;
-	unsigned long protflags;
 	long nrpages = (end - start) >> PAGE_SHIFT;
 	unsigned long charged = 0;
 	pgoff_t pgoff;
@@ -206,17 +205,8 @@ success:
 	 * held in write mode.
 	 */
 	vma->vm_flags = newflags;
-	protflags = newflags;
-#ifdef CONFIG_IPIPE
-	/*
-	 * Enforce non-COW vm_page_prot by faking VM_SHARED on locked regions.
-	 */
-	if (test_bit(MMF_VM_PINNED, &mm->flags) &&
-	    ((vma->vm_flags | mm->def_flags) & VM_LOCKED))
-		protflags |= VM_SHARED;
-#endif
 	vma->vm_page_prot = pgprot_modify(vma->vm_page_prot,
-					  vm_get_page_prot(protflags));
+					  vm_get_page_prot(newflags));
 
 	if (vma_wants_writenotify(vma)) {
 		vma->vm_page_prot = vm_get_page_prot(newflags & ~VM_SHARED);
@@ -224,28 +214,16 @@ success:
 	}
 
 	mmu_notifier_invalidate_range_start(mm, start, end);
-#ifdef CONFIG_IPIPE
-	/*
-	 * Privatize potential COW pages
-	 */
-	if (test_bit(MMF_VM_PINNED, &mm->flags) &&
-	    (((vma->vm_flags | mm->def_flags) & (VM_LOCKED | VM_WRITE)) ==
-	     (VM_LOCKED | VM_WRITE))) {
-		error = __ipipe_pin_vma(mm, vma);
-		if (error)
-			/*
-			 * OOM. Just revert the fake VM_SHARED so that the
-			 * zero page cannot be overwritten.
-			 */
-			vma->vm_page_prot =
-				pgprot_modify(vma->vm_page_prot,
-					      vm_get_page_prot(newflags));
-	}
-#endif
 	if (is_vm_hugetlb_page(vma))
 		hugetlb_change_protection(vma, start, end, vma->vm_page_prot);
 	else
 		change_protection(vma, start, end, vma->vm_page_prot, dirty_accountable);
+#ifdef CONFIG_IPIPE
+	if (test_bit(MMF_VM_PINNED, &mm->flags) &&
+	    ((vma->vm_flags | mm->def_flags) & VM_LOCKED) &&
+	    (vma->vm_flags & (VM_READ | VM_WRITE | VM_EXEC)))
+		__ipipe_pin_vma(mm, vma);
+#endif
 	mmu_notifier_invalidate_range_end(mm, start, end);
 	vm_stat_account(mm, oldflags, vma->vm_file, -nrpages);
 	vm_stat_account(mm, newflags, vma->vm_file, nrpages);
