@@ -191,7 +191,7 @@ void __init __ipipe_enable_pipeline(void)
 #ifdef CONFIG_IRQ_WORK
 	ipipe_request_irq(ipipe_root_domain,
 			  ipipe_apic_vector_irq(IRQ_WORK_VECTOR),
-			  __ipipe_do_IRQ, irq_work_interrupt,
+			  __ipipe_do_IRQ, smp_irq_work_interrupt,
 			  __ipipe_ack_apic);
 #endif /* CONFIG_IRQ_WORK */
 
