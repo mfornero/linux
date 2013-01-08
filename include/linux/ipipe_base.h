@@ -356,4 +356,13 @@ static inline void ipipe_root_only(void) { }
 
 #endif	/* !CONFIG_IPIPE */
 
+static inline void ipipe_preempt_root_only(void)
+{
+#if defined(CONFIG_IPIPE_DEBUG_CONTEXT) && \
+    defined(CONFIG_IPIPE_LEGACY) && \
+    !defined(CONFIG_IPIPE_HAVE_SAFE_THREAD_INFO)
+	ipipe_root_only();
+#endif
+}
+
 #endif	/* !__LINUX_IPIPE_BASE_H */

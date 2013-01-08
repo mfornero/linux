@@ -54,3 +54,6 @@ config HAVE_IPIPE_HOSTRT
 
 config IPIPE_DELAYED_ATOMICSW
        def_bool y if IPIPE_LEGACY
+
+config IPIPE_HAVE_SAFE_THREAD_INFO
+	bool

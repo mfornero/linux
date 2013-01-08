@@ -2739,7 +2739,7 @@ notrace unsigned long get_parent_ip(unsigned long addr)
 
 void __kprobes add_preempt_count(int val)
 {
- 	ipipe_root_only();
+	ipipe_preempt_root_only();
 #ifdef CONFIG_DEBUG_PREEMPT
 	/*
 	 * Underflow?
@@ -2762,6 +2762,7 @@ EXPORT_SYMBOL(add_preempt_count);
 
 void __kprobes sub_preempt_count(int val)
 {
+	ipipe_preempt_root_only();
 #ifdef CONFIG_DEBUG_PREEMPT
 	/*
 	 * Underflow?
