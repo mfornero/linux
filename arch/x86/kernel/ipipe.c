@@ -508,17 +508,26 @@ int __ipipe_divert_exception(struct pt_regs *regs, int vector)
 		}
 	}
 #ifdef CONFIG_KGDB
-	/* catch int1 and int3 over non-root domains */
-	else {
+	/*
+	 * Catch int1 and int3 for kgdb here. They may trigger over
+	 * inconsistent states even when the root domain is active.
+	 */
 #ifdef CONFIG_X86_32
-		if (vector != ex_do_device_not_available)
+	if (vector != ex_do_device_not_available)
 #endif
-		{
-			unsigned int condition = 0;
-			if (vector == 1)
-				get_debugreg(condition, 6);
-			if (!kgdb_handle_exception(vector, SIGTRAP, condition, regs))
-				return 1;
+	{
+		unsigned int condition = 0;
+
+		if (vector == 1)
+			get_debugreg(condition, 6);
+		if (!kgdb_handle_exception(vector, SIGTRAP, condition, regs)) {
+			if (root_entry) {
+				ipipe_restore_root_nosync(flags);
+				__fixup_if(root_entry ?
+					   raw_irqs_disabled_flags(flags) :
+					   raw_irqs_disabled(), regs);
+			}
+			return 1;
 		}
 	}
 #endif /* CONFIG_KGDB */
