@@ -393,6 +393,18 @@ int __ipipe_handle_exception(struct pt_regs *regs, long error_code, int vector)
 	unsigned long flags = 0;
 	unsigned long cr2 = 0;
 
+#ifdef CONFIG_KGDB
+	/* Fixup kgdb-own faults immediately. */
+	if (__ipipe_probe_access) {
+		const struct exception_table_entry *fixup =
+			search_exception_tables(regs->ip);
+
+		BUG_ON(!fixup);
+		regs->ip = (unsigned long)&fixup->fixup + fixup->fixup;
+		return 1;
+	}
+#endif /* CONFIG_KGDB */
+
 	if (ipipe_root_p) {
 		root_entry = true;
 
