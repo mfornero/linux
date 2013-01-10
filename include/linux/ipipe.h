@@ -401,6 +401,11 @@ static inline void ipipe_handle_demuxed_irq(unsigned int cascade_irq)
 			(p)->ipipe.flags |= PF_MAYDAY;	\
 	} while (0)
 
+extern bool __ipipe_probe_access;
+
+long ipipe_probe_kernel_read(void *dst, void *src, size_t size);
+long ipipe_probe_kernel_write(void *dst, void *src, size_t size);
+
 #include <linux/ipipe_compat.h>
 
 #else	/* !CONFIG_IPIPE */
@@ -430,6 +435,9 @@ static inline int ipipe_test_foreign_stack(void)
 static inline void ipipe_lock_irq(unsigned int irq) { }
 
 static inline void ipipe_unlock_irq(unsigned int irq) { }
+
+#define ipipe_probe_kernel_read(d, s, sz)	probe_kernel_read(d, s, sz)
+#define ipipe_probe_kernel_write(d, s, sz)	probe_kernel_write(d, s, sz)
 
 #endif	/* !CONFIG_IPIPE */
 

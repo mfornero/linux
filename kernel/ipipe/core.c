@@ -1731,3 +1731,40 @@ out:
 	ipipe_restore_head(flags);
 }
 EXPORT_SYMBOL_GPL(__ipipe_post_work_root);
+
+#ifdef CONFIG_KGDB
+bool __ipipe_probe_access;
+
+long ipipe_probe_kernel_read(void *dst, void *src, size_t size)
+{
+	long ret;
+	mm_segment_t old_fs = get_fs();
+
+	set_fs(KERNEL_DS);
+	__ipipe_probe_access = true;
+	barrier();
+	ret = __copy_from_user_inatomic(dst,
+			(__force const void __user *)src, size);
+	barrier();
+	__ipipe_probe_access = false;
+	set_fs(old_fs);
+
+	return ret ? -EFAULT : 0;
+}
+
+long ipipe_probe_kernel_write(void *dst, void *src, size_t size)
+{
+	long ret;
+	mm_segment_t old_fs = get_fs();
+
+	set_fs(KERNEL_DS);
+	__ipipe_probe_access = true;
+	barrier();
+	ret = __copy_to_user_inatomic((__force void __user *)dst, src, size);
+	barrier();
+	__ipipe_probe_access = false;
+	set_fs(old_fs);
+
+	return ret ? -EFAULT : 0;
+}
+#endif /* CONFIG_KGDB */
