@@ -31,6 +31,7 @@
 #include <linux/clockchips.h>
 #include <linux/kprobes.h>
 #include <linux/mm.h>
+#include <linux/kgdb.h>
 #include <linux/ipipe_tickdev.h>
 #include <asm/asm-offsets.h>
 #include <asm/unistd.h>
@@ -355,38 +356,6 @@ static __ipipe_exptr __ipipe_std_extable[] = {
 #endif
 };
 
-#ifdef CONFIG_KGDB
-#include <linux/kgdb.h>
-
-static int __ipipe_xlate_signo[] = {
-
-	[ex_do_divide_error] = SIGFPE,
-	[ex_do_debug] = SIGTRAP,
-	[2] = -1,
-	[ex_do_int3] = SIGTRAP,
-	[ex_do_overflow] = SIGSEGV,
-	[ex_do_bounds] = SIGSEGV,
-	[ex_do_invalid_op] = SIGILL,
-	[ex_do_device_not_available] = -1,
-	[8] = -1,
-	[ex_do_coprocessor_segment_overrun] = SIGFPE,
-	[ex_do_invalid_TSS] = SIGSEGV,
-	[ex_do_segment_not_present] = SIGBUS,
-	[ex_do_stack_segment] = SIGBUS,
-	[ex_do_general_protection] = SIGSEGV,
-	[ex_do_page_fault] = SIGSEGV,
-	[ex_do_spurious_interrupt_bug] = -1,
-	[ex_do_coprocessor_error] = -1,
-	[ex_do_alignment_check] = SIGBUS,
-	[ex_machine_check_vector] = -1,
-	[ex_do_simd_coprocessor_error] = -1,
-	[20 ... 31] = -1,
-#ifdef CONFIG_X86_32
-	[ex_do_iret_error] = SIGSEGV,
-#endif
-};
-#endif /* CONFIG_KGDB */
-
 int __ipipe_handle_exception(struct pt_regs *regs, long error_code, int vector)
 {
 	bool root_entry = false;
@@ -418,13 +387,6 @@ int __ipipe_handle_exception(struct pt_regs *regs, long error_code, int vector)
 		if (hard_irqs_disabled())
 			local_irq_disable();
 	}
-#ifdef CONFIG_KGDB
-	/* catch exception KGDB is interested in over non-root domains */
-	else if (__ipipe_xlate_signo[vector] >= 0 &&
-		 !kgdb_handle_exception(vector, __ipipe_xlate_signo[vector],
-					error_code, regs))
-		return 1;
-#endif /* CONFIG_KGDB */
 
 	if (vector == ex_do_page_fault)
 		cr2 = native_read_cr2();
