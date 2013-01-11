@@ -5750,6 +5750,7 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 		vcpu->mode = OUTSIDE_GUEST_MODE;
 		smp_wmb();
 		hard_cond_local_irq_enable();
+		local_irq_enable();
 		preempt_enable();
 		r = 1;
 		goto cancel_injection;
