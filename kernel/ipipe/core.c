@@ -1138,6 +1138,7 @@ int __ipipe_switch_tail(void)
 	return !x;
 }
 
+#ifdef CONFIG_IPIPE_HAVE_VM_NOTIFIER
 void __ipipe_notify_vm_preemption(void)
 {
 	struct ipipe_vm_notifier *vmf;
@@ -1150,6 +1151,7 @@ void __ipipe_notify_vm_preemption(void)
 		vmf->handler(vmf);
 }
 EXPORT_SYMBOL_GPL(__ipipe_notify_vm_preemption);
+#endif /* CONFIG_IPIPE_HAVE_VM_NOTIFIER */
 
 static void dispatch_irq_head(unsigned int irq) /* hw interrupts off */
 {
