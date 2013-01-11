@@ -133,7 +133,7 @@ static inline void __ipipe_enter_vm(struct ipipe_vm_notifier *vmf)
 {
 	struct ipipe_percpu_data *p;
 
-	p = __ipipe_this_cpu_ptr(&ipipe_percpu);
+	p = __this_cpu_ptr(&ipipe_percpu);
 	p->vm_notifier = vmf;
 	barrier();
 }
@@ -142,7 +142,7 @@ static inline void __ipipe_exit_vm(void)
 {
 	struct ipipe_percpu_data *p;
 
-	p = __ipipe_this_cpu_ptr(&ipipe_percpu);
+	p = __this_cpu_ptr(&ipipe_percpu);
 	p->vm_notifier = NULL;
 	barrier();
 }
