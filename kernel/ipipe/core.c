@@ -848,7 +848,9 @@ int ipipe_request_irq(struct ipipe_domain *ipd,
 	unsigned long flags;
 	int ret = 0;
 
+#ifndef CONFIG_IPIPE_LEGACY
 	ipipe_root_only();
+#endif /* CONFIG_IPIPE_LEGACY */
 
 	if (handler == NULL ||
 	    (irq >= IPIPE_NR_XIRQS && !ipipe_virtual_irq_p(irq)))
@@ -883,7 +885,9 @@ void ipipe_free_irq(struct ipipe_domain *ipd,
 {
 	unsigned long flags;
 
+#ifndef CONFIG_IPIPE_LEGACY
 	ipipe_root_only();
+#endif /* CONFIG_IPIPE_LEGACY */
 
 	spin_lock_irqsave(&__ipipe_lock, flags);
 
