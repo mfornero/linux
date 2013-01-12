@@ -666,7 +666,7 @@ ENTRY(sys_oabi_call_table)
 #endif
 
 
-#ifdef CONFIG_FRAME_POINTER
+#if defined(CONFIG_FRAME_POINTER) && (CONFIG_IPIPE_TRACE)
 
 	.text
 	.align 0

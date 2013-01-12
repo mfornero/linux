@@ -29,10 +29,15 @@
 
 #define BROKEN_BUILTIN_RETURN_ADDRESS
 #undef __BUILTIN_RETURN_ADDRESS0
-#define __BUILTIN_RETURN_ADDRESS0 arm_return_addr(0)
 #undef __BUILTIN_RETURN_ADDRESS1
+#ifdef CONFIG_FRAME_POINTER
+#define __BUILTIN_RETURN_ADDRESS0 arm_return_addr(0)
 #define __BUILTIN_RETURN_ADDRESS1 arm_return_addr(1)
 extern unsigned long arm_return_addr(int level);
+#else
+#define __BUILTIN_RETURN_ADDRESS0 ((unsigned long)__builtin_return_address(0))
+#define __BUILTIN_RETURN_ADDRESS1 (0)
+#endif
 
 #include <linux/ipipe_trace.h>
 #include <mach/irqs.h>

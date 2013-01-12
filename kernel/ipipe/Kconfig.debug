@@ -24,8 +24,8 @@ config IPIPE_DEBUG_INTERNAL
 config IPIPE_TRACE
 	bool "Latency tracing"
 	depends on IPIPE_DEBUG
-	select ARCH_WANT_FRAME_POINTERS
-	select FRAME_POINTER
+	select ARCH_WANT_FRAME_POINTERS if !ARM_UNWIND
+	select FRAME_POINTER if !ARM_UNWIND
 	select KALLSYMS
 	select PROC_FS
 	---help---
