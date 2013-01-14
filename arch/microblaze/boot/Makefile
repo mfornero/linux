@@ -38,10 +38,7 @@ UIMAGE_OUT = $@.ub
 UIMAGE_LOADADDR = $(CONFIG_KERNEL_BASE_ADDR)
 
 $(obj)/simpleImage.%: vmlinux FORCE
-	$(call if_changed,cp,.unstrip)
-	$(call if_changed,objcopy)
-	$(call if_changed,uimage)
-	$(call if_changed,strip)
+	$(call if_changed,cp)
 	@echo 'Kernel: $@ is ready' ' (#'`cat .version`')'
 
 

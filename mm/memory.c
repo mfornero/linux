@@ -821,6 +821,7 @@ check_pfn:
 out:
 	return pfn_to_page(pfn);
 }
+EXPORT_SYMBOL(vm_normal_page);
 
 static inline void cow_user_page(struct page *dst, struct page *src, unsigned long va, struct vm_area_struct *vma)
 {
@@ -1673,6 +1674,7 @@ no_page_table:
 		return ERR_PTR(-EFAULT);
 	return page;
 }
+EXPORT_SYMBOL(follow_page);
 
 static inline int stack_guard_page(struct vm_area_struct *vma, unsigned long addr)
 {
@@ -3596,6 +3598,7 @@ retry:
 
 	return handle_pte_fault(mm, vma, address, pte, pmd, flags);
 }
+EXPORT_SYMBOL(handle_mm_fault);
 
 #ifndef __PAGETABLE_PUD_FOLDED
 /*
@@ -3700,6 +3703,7 @@ struct vm_area_struct *get_gate_vma(struct mm_struct *mm)
 	return NULL;
 #endif
 }
+EXPORT_SYMBOL(get_gate_vma);
 
 int in_gate_area_no_mm(unsigned long addr)
 {
@@ -3709,6 +3713,7 @@ int in_gate_area_no_mm(unsigned long addr)
 #endif
 	return 0;
 }
+EXPORT_SYMBOL(in_gate_area_no_mm);
 
 #endif	/* __HAVE_ARCH_GATE_AREA */
 

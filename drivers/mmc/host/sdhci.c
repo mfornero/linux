@@ -1952,6 +1952,7 @@ static void sdhci_tasklet_card(unsigned long param)
 {
 	struct sdhci_host *host;
 	unsigned long flags;
+	bool present = true;
 
 	host = (struct sdhci_host*)param;
 

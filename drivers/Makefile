@@ -1,4 +1,4 @@
-#
+
 # Makefile for the Linux kernel device drivers.
 #
 # 15 Sep 2000, Christoph Hellwig <hch@infradead.org>
@@ -103,6 +103,7 @@ obj-$(CONFIG_INFINIBAND)	+= infiniband/
 obj-$(CONFIG_SGI_SN)		+= sn/
 obj-y				+= firmware/
 obj-$(CONFIG_CRYPTO)		+= crypto/
+obj-$(CONFIG_XILINX_EDK)	+= xilinx_common/
 obj-$(CONFIG_SUPERH)		+= sh/
 obj-$(CONFIG_ARCH_SHMOBILE)	+= sh/
 ifndef CONFIG_ARCH_USES_GETTIMEOFFSET
@@ -119,6 +120,7 @@ obj-$(CONFIG_VLYNQ)		+= vlynq/
 obj-$(CONFIG_STAGING)		+= staging/
 obj-y				+= platform/
 obj-y				+= ieee802154/
+obj-y				+= xilinx_common/
 #common clk code
 obj-y				+= clk/
 

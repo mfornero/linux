@@ -212,6 +212,7 @@ config DW_WATCHDOG
 config MPCORE_WATCHDOG
 	tristate "MPcore watchdog"
 	depends on HAVE_ARM_TWD
+	select WATCHDOG_CORE
 	help
 	  Watchdog timer embedded into the MPcore system.
 
@@ -320,6 +321,14 @@ config NUC900_WATCHDOG
 	  for the Nuvoton NUC900 series SoCs.
 	  To compile this driver as a module, choose M here: the
 	  module will be called nuc900_wdt.
+
+config XILINX_PS_WATCHDOG
+	tristate "Xilinx PS Watchdog Timer"
+	depends on ARCH_XILINX || ARCH_ZYNQ
+	select WATCHDOG_CORE
+	help
+	  Say Y here if you want to include support for the watchdog
+	  timer in the Xilinx PS.
 
 config TS72XX_WATCHDOG
 	tristate "TS-72XX SBC Watchdog"

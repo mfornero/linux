@@ -1,4 +1,4 @@
-#
+
 # Makefile for kernel SPI drivers.
 #
 
@@ -62,4 +62,6 @@ obj-$(CONFIG_SPI_TLE62X0)		+= spi-tle62x0.o
 obj-$(CONFIG_SPI_TOPCLIFF_PCH)		+= spi-topcliff-pch.o
 obj-$(CONFIG_SPI_TXX9)			+= spi-txx9.o
 obj-$(CONFIG_SPI_XILINX)		+= spi-xilinx.o
+obj-$(CONFIG_SPI_XILINX_PS_SPI)		+= spi-xilinx-ps.o
+obj-$(CONFIG_SPI_XILINX_PS_QSPI)	+= spi-xilinx-qps.o
 

@@ -22,6 +22,7 @@
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/of.h>
+#include <linux/memblock.h>
 
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
@@ -43,77 +44,95 @@ static struct of_device_id zynq_of_bus_ids[] __initdata = {
  * xilinx_init_machine() - System specific initialization, intended to be
  *			   called from board specific initialization.
  */
-static void __init xilinx_init_machine(void)
+void __init xilinx_init_machine(void)
 {
+	of_platform_bus_probe(NULL, zynq_of_bus_ids, NULL);
+
 #ifdef CONFIG_CACHE_L2X0
 	/*
-	 * 64KB way size, 8-way associativity, parity disabled
+	 * 64KB way size, 8-way associativity, parity disabled, prefetching option
 	 */
-	l2x0_init(PL310_L2CC_BASE, 0x02060000, 0xF0F0FFFF);
+#ifndef	CONFIG_XILINX_L2_PREFETCH
+	l2x0_of_init(0x02060000, 0xF0F0FFFF);
+#else
+	l2x0_of_init(0x72060000, 0xF0F0FFFF);
+#endif
 #endif
 
-	of_platform_bus_probe(NULL, zynq_of_bus_ids, NULL);
+	platform_device_init();
 }
+
+static const struct of_device_id xilinx_dt_irq_match[] __initconst = {
+	{ .compatible = "arm,cortex-a9-gic", .data = gic_of_init },
+	{ }
+};
 
 /**
  * xilinx_irq_init() - Interrupt controller initialization for the GIC.
  */
-static void __init xilinx_irq_init(void)
+void __init xilinx_irq_init(void)
 {
-	gic_init(0, 29, SCU_GIC_DIST_BASE, SCU_GIC_CPU_BASE);
+	of_irq_init(xilinx_dt_irq_match);
 }
 
 /* The minimum devices needed to be mapped before the VM system is up and
  * running include the GIC, UART and Timer Counter.
  */
-
-static struct map_desc io_desc[] __initdata = {
+struct map_desc io_desc[] __initdata = {
 	{
-		.virtual	= TTC0_VIRT,
-		.pfn		= __phys_to_pfn(TTC0_PHYS),
-		.length		= SZ_4K,
-		.type		= MT_DEVICE,
-	}, {
 		.virtual	= SCU_PERIPH_VIRT,
 		.pfn		= __phys_to_pfn(SCU_PERIPH_PHYS),
 		.length		= SZ_8K,
 		.type		= MT_DEVICE,
-	}, {
-		.virtual	= PL310_L2CC_VIRT,
-		.pfn		= __phys_to_pfn(PL310_L2CC_PHYS),
-		.length		= SZ_4K,
-		.type		= MT_DEVICE,
-	},
+	}, 
 
 #ifdef CONFIG_DEBUG_LL
 	{
 		.virtual	= UART0_VIRT,
 		.pfn		= __phys_to_pfn(UART0_PHYS),
-		.length		= SZ_4K,
+		.length		= SZ_8K,
 		.type		= MT_DEVICE,
 	},
 #endif
 
+	/* create a mapping for the OCM  (256K) leaving a hole for the
+	 * interrupt vectors which are handled in the kernel
+	 */
+	{
+		.virtual	= OCM_LOW_VIRT,
+		.pfn		= __phys_to_pfn(OCM_LOW_PHYS),
+		.length		= (192 * SZ_1K),
+		.type		= MT_DEVICE_CACHED,
+	},
+	{
+		.virtual	= OCM_HIGH_VIRT,
+		.pfn		= __phys_to_pfn(OCM_HIGH_PHYS),
+		.length		= (60 * SZ_1K),
+		.type		= MT_DEVICE,
+	},
 };
+
 
 /**
  * xilinx_map_io() - Create memory mappings needed for early I/O.
  */
-static void __init xilinx_map_io(void)
+void __init xilinx_map_io(void)
 {
 	iotable_init(io_desc, ARRAY_SIZE(io_desc));
 }
 
-static const char *xilinx_dt_match[] = {
-	"xlnx,zynq-ep107",
-	NULL
-};
-
-MACHINE_START(XILINX_EP107, "Xilinx Zynq Platform")
-	.map_io		= xilinx_map_io,
-	.init_irq	= xilinx_irq_init,
-	.handle_irq	= gic_handle_irq,
-	.init_machine	= xilinx_init_machine,
-	.timer		= &xttcpss_sys_timer,
-	.dt_compat	= xilinx_dt_match,
-MACHINE_END
+/**
+ * xilinx_memory_init() - Initialize special memory 
+ * 
+ * We need to stop things allocating the low memory as DMA can't work in
+ * the 1st 512K of memory.  Using reserve vs remove is not totally clear yet.
+ */
+void __init xilinx_memory_init()
+{
+#if (CONFIG_PHYS_OFFSET == 0)
+	/* Reserve the 0-0x4000 addresses (before page tables and kernel)
+	 * which can't be used for DMA
+	 */ 
+	memblock_reserve(0, 0x4000);
+#endif
+}

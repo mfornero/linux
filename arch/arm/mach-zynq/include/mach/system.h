@@ -1,4 +1,4 @@
-/* arch/arm/mach-zynq/include/mach/hardware.h
+/* arch/arm/mach-zynq/include/mach/system.h
  *
  *  Copyright (C) 2011 Xilinx
  *
@@ -12,7 +12,17 @@
  * GNU General Public License for more details.
  */
 
-#ifndef __MACH_HARDWARE_H__
-#define __MACH_HARDWARE_H__
+#ifndef __MACH_SYSTEM_H__
+#define __MACH_SYSTEM_H__
+
+static inline void arch_idle(void)
+{
+	cpu_do_idle();
+}
+
+static inline void arch_reset(char mode, const char *cmd)
+{
+	/* Add architecture specific reset processing here */
+}
 
 #endif

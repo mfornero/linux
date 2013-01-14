@@ -973,13 +973,17 @@ config ARCH_VT8500
 config ARCH_ZYNQ
 	bool "Xilinx Zynq ARM Cortex A9 Platform"
 	select CPU_V7
+	select GENERIC_TIME
 	select GENERIC_CLOCKEVENTS
 	select CLKDEV_LOOKUP
 	select ARM_GIC
 	select ARM_AMBA
 	select ICST
-	select MIGHT_HAVE_CACHE_L2X0
 	select USE_OF
+ 	select HAVE_SMP
+	select CACHE_L2X0
+	select ISA_DMA_API
+	select ARCH_REQUIRE_GPIOLIB
 	help
 	  Support for Xilinx Zynq ARM Cortex A9 Platform
 endchoice
@@ -1094,6 +1098,8 @@ source "arch/arm/plat-versatile/Kconfig"
 source "arch/arm/mach-vt8500/Kconfig"
 
 source "arch/arm/mach-w90x900/Kconfig"
+
+source "arch/arm/mach-zynq/Kconfig"
 
 # Definitions to make life easier
 config ARCH_ACORN

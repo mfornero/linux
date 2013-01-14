@@ -35,6 +35,13 @@
 #include <linux/spi/spi.h>
 #include <linux/spi/flash.h>
 
+#define HACK_PAGE_SZ_128		/* temp hack to use 128 byte page */
+#ifdef HACK_PAGE_SZ_128
+ #define MTD_PAGE_SIZE	128
+#else
+ #define MTD_PAGE_SIZE	256
+#endif
+
 /* Flash opcodes. */
 #define	OPCODE_WREN		0x06	/* Write enable */
 #define	OPCODE_RDSR		0x05	/* Read status register */
@@ -594,6 +601,7 @@ struct flash_info {
 	u16		flags;
 #define	SECT_4K		0x01		/* OPCODE_BE_4K works uniformly */
 #define	M25P_NO_ERASE	0x02		/* No erase command needed */
+#define	SECT_32K	0x03		/* OPCODE_BE_32K */
 };
 
 #define INFO(_jedec_id, _ext_id, _sector_size, _n_sectors, _flags)	\
@@ -675,7 +683,11 @@ static const struct spi_device_id m25p_ids[] = {
 	{ "s25sl12800", INFO(0x012018, 0x0300, 256 * 1024,  64, 0) },
 	{ "s25sl12801", INFO(0x012018, 0x0301,  64 * 1024, 256, 0) },
 	{ "s25fl129p0", INFO(0x012018, 0x4d00, 256 * 1024,  64, 0) },
+#ifdef CONFIG_XILINX_PS_QSPI_USE_DUAL_FLASH
+	{ "s25fl129p1x2", INFO(0x012018, 0x4d01,  128 * 1024, 256, 0) },
+#else
 	{ "s25fl129p1", INFO(0x012018, 0x4d01,  64 * 1024, 256, 0) },
+#endif
 	{ "s25fl016k",  INFO(0xef4015,      0,  64 * 1024,  32, SECT_4K) },
 	{ "s25fl064k",  INFO(0xef4017,      0,  64 * 1024, 128, SECT_4K) },
 
@@ -688,6 +700,7 @@ static const struct spi_device_id m25p_ids[] = {
 	{ "sst25wf010",  INFO(0xbf2502, 0, 64 * 1024,  2, SECT_4K) },
 	{ "sst25wf020",  INFO(0xbf2503, 0, 64 * 1024,  4, SECT_4K) },
 	{ "sst25wf040",  INFO(0xbf2504, 0, 64 * 1024,  8, SECT_4K) },
+	{ "sst25wf080",  INFO(0xbf2505, 0, 64 * 1024,  16, SECT_4K) },
 
 	/* ST Microelectronics -- newer production may have feature updates */
 	{ "m25p05",  INFO(0x202010,  0,  32 * 1024,   2, 0) },
@@ -699,6 +712,13 @@ static const struct spi_device_id m25p_ids[] = {
 	{ "m25p32",  INFO(0x202016,  0,  64 * 1024,  64, 0) },
 	{ "m25p64",  INFO(0x202017,  0,  64 * 1024, 128, 0) },
 	{ "m25p128", INFO(0x202018,  0, 256 * 1024,  64, 0) },
+
+	/* Numonyx flash n25q128 */
+#ifdef CONFIG_XILINX_PS_QSPI_USE_DUAL_FLASH
+	{ "n25q128x2", INFO(0x20bb18,  0, 128 * 1024, 256, 0) },
+#else
+	{ "n25q128",   INFO(0x20bb18,  0,  64 * 1024, 256, 0) },
+#endif
 
 	{ "m25p05-nonjedec",  INFO(0, 0,  32 * 1024,   2, 0) },
 	{ "m25p10-nonjedec",  INFO(0, 0,  32 * 1024,   4, 0) },
@@ -731,7 +751,12 @@ static const struct spi_device_id m25p_ids[] = {
 	{ "w25x32", INFO(0xef3016, 0, 64 * 1024,  64, SECT_4K) },
 	{ "w25q32", INFO(0xef4016, 0, 64 * 1024,  64, SECT_4K) },
 	{ "w25x64", INFO(0xef3017, 0, 64 * 1024, 128, SECT_4K) },
-	{ "w25q64", INFO(0xef4017, 0, 64 * 1024, 128, SECT_4K) },
+	/* Winbond -- w25q "blocks" are 64K, "sectors" are 32KiB */
+	/* w25q64 supports 4KiB, 32KiB and 64KiB sectors erase size. */
+	/* To support JFFS2, the minimum erase size is 8KiB(>4KiB). */
+	/* And thus, the sector size of w25q64 is set to 32KiB for */
+	/* JFFS2 support. */
+	{ "w25q64", INFO(0xef4017, 0, 64 * 1024, 128, SECT_32K) },
 	{ "w25q80", INFO(0xef5014, 0, 64 * 1024,  16, SECT_4K) },
 
 	/* Catalyst / On Semiconductor -- non-JEDEC */
@@ -895,6 +920,9 @@ static int __devinit m25p_probe(struct spi_device *spi)
 	if (info->flags & SECT_4K) {
 		flash->erase_opcode = OPCODE_BE_4K;
 		flash->mtd.erasesize = 4096;
+	} else if (info->flags & SECT_32K) {
+		flash->erase_opcode = OPCODE_BE_32K;
+		flash->mtd.erasesize = 32768;
 	} else {
 		flash->erase_opcode = OPCODE_SE;
 		flash->mtd.erasesize = info->sector_size;
