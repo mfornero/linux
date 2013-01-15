@@ -1593,7 +1593,7 @@ void ipipe_root_only(void)
 	dump_stack();
 	ipipe_trace_panic_dump();
 }
-EXPORT_SYMBOL_GPL(ipipe_root_only);
+EXPORT_SYMBOL(ipipe_root_only);
 
 #endif /* CONFIG_IPIPE_DEBUG_CONTEXT */
 
