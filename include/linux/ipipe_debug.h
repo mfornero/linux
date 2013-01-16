@@ -83,11 +83,11 @@ static inline void ipipe_restore_context_nmi(void) { }
 
 #ifdef CONFIG_IPIPE_DEBUG
 
-static inline void ipipe_check_irqoff(void)
-{
-	if (WARN_ON_ONCE(!hard_irqs_disabled()))
-		hard_local_irq_disable();
-}
+#define ipipe_check_irqoff()					\
+	do {							\
+		if (WARN_ON_ONCE(!hard_irqs_disabled()))	\
+			hard_local_irq_disable();		\
+	} while (0)
 
 #else /* !CONFIG_IPIPE_DEBUG */
 
