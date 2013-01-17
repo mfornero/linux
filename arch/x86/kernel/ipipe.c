@@ -558,8 +558,10 @@ int __ipipe_syscall_root(struct pt_regs *regs)
 		__ipipe_notify_trap(IPIPE_TRAP_MAYDAY, regs);
 	}
 
-	if (!ipipe_root_p)
+	if (!ipipe_root_p) {
+		ipipe_trace_irqson(); /* sysret will re-enable interrupts */
 		return 1;
+	}
 
 	p = ipipe_this_cpu_root_context();
 	if (__ipipe_ipending_p(p))
@@ -567,6 +569,8 @@ int __ipipe_syscall_root(struct pt_regs *regs)
 
 	if (ret == 0)
 		hard_local_irq_restore(flags);
+	else
+		ipipe_trace_irqson(); /* sysret will re-enable interrupts */
 
 	return -ret;
 }
