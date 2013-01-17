@@ -17,6 +17,7 @@
 #include <linux/module.h>
 #include <linux/io.h>
 #include <linux/irq.h>
+#include <linux/ipipe.h>
 #include <linux/gpio.h>
 #include <linux/init.h>
 #include <linux/errno.h>
@@ -87,7 +88,7 @@ struct xgpiops {
 #ifdef CONFIG_COMMON_CLK
 	struct clk *clk;
 #endif
-	spinlock_t gpio_lock;
+	ipipe_spinlock_t gpio_lock;
 };
 
 /**
