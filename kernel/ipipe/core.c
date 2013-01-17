@@ -1124,7 +1124,9 @@ int __ipipe_switch_tail(void)
 	hard_local_irq_disable();
 #endif
 	x = __ipipe_root_p;
+#ifndef CONFIG_IPIPE_LEGACY
 	if (x)
+#endif
 		complete_domain_migration();
 
 #ifndef CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH
