@@ -1171,18 +1171,19 @@ static void dispatch_irq_head(unsigned int irq) /* hw interrupts off */
 	head->irqs[irq].handler(irq, head->irqs[irq].cookie);
 	__ipipe_run_irqtail(irq);
 	hard_local_irq_disable();
+	p = ipipe_this_cpu_head_context();
 	__clear_bit(IPIPE_STALL_FLAG, &p->status);
 
 	/* Are we still running in the head domain? */
 	if (likely(__ipipe_current_context == p)) {
 		/* Did we enter this code over the head domain? */
-		if (old == p) {
+		if (old->domain == head) {
 			/* Yes, do immediate synchronization. */
 			if (__ipipe_ipending_p(p))
 				__ipipe_sync_stage();
 			return;
 		}
-		__ipipe_set_current_context(old);
+		__ipipe_set_current_context(ipipe_this_cpu_root_context());
 	}
 
 	/*
