@@ -772,6 +772,7 @@ __fixup_irq_handler(struct irq_desc *desc, irq_flow_handler_t handle, int is_cha
 }
 
 #endif /* !CONFIG_IPIPE */
+EXPORT_SYMBOL_GPL(__fixup_irq_handler);
 
 void
 __irq_set_handler(unsigned int irq, irq_flow_handler_t handle, int is_chained,
