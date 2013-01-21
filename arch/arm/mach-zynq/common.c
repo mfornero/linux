@@ -207,6 +207,7 @@ static const char *xilinx_dt_match[] = {
 	"xlnx,zynq-zc702",
 	"xlnx,zynq-zc706",
 	"xlnx,zynq-zc770",
+	"xlnx,zynq-zed",
 	NULL
 };
 
