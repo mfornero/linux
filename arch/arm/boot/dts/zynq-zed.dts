@@ -40,7 +40,9 @@
 		serial0 = &ps7_uart_1;
 	} ;
 	chosen {
-		bootargs = "console=ttyPS0,115200 root=/dev/ram rw ip=:::::eth0:dhcp earlyprintk";
+		/*bootargs = "console=ttyPS0,115200 root=/dev/ram rw ip=:::::eth0:dhcp earlyprintk"; */
+		/*bootargs = "console=ttyPS0,115200 root=/dev/ram rw initrd=0x800000,8M earlyprintk rootfstype=ext4 rootwait devtmpfs.mount=0";&*/
+		bootargs = "console=ttyPS0,115200 root=/dev/mmcblk0p2 rw earlyprintk rootfstype=ext4 rootwait devtmpfs.mount=0";
 		linux,stdout-path = "/axi@0/serial@e0001000";
 	} ;
 	cpus {
@@ -143,10 +145,13 @@
 			mdio {
 				#address-cells = <1>;
 				#size-cells = <0>;
-				phy0: phy@7 {
+				phy0: phy@0 {
 					compatible = "marvell,88e1510";
 					device_type = "ethernet-phy";
-					reg = <7>;
+					reg = <0>;
+					marvell,reg-init = <0x3 0x10 0xff00 0x1e 0x3 0x11 0xfff0 0xa>;
+					linux,phandle = <0x2>;
+					phandle = <0x2>;
 				} ;
 			} ;
 		} ;
