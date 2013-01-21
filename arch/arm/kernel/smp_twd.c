@@ -33,7 +33,6 @@
 static void __iomem *twd_base;
 static struct clk *twd_clk;
 
-static struct clk *twd_clk;
 static unsigned long twd_timer_rate;
 
 static struct clock_event_device __percpu **twd_evt;

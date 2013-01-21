@@ -18,6 +18,7 @@
  */
 
 #include <linux/clk.h>
+#include <linux/err.h>
 #include <linux/delay.h>
 #include <linux/io.h>
 #include <linux/mmc/host.h>
