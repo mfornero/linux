@@ -422,7 +422,7 @@ void xgpiops_irqhandler(unsigned int irq, struct irq_desc *desc)
 			chip->irq_ack(&gpio_irq_desc->irq_data);
 
 			/* call the pin specific handler */
-			generic_handle_irq(gpio_irq);
+			ipipe_handle_demuxed_irq(gpio_irq);
 		}
 		/* shift to first virtual irq of next bank */
 		gpio_irq = (int)irq_get_handler_data(irq) +
