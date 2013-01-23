@@ -21,6 +21,7 @@ static IPIPE_DEFINE_SPINLOCK(cpu_asid_lock);
 unsigned int cpu_last_asid = ASID_FIRST_VERSION;
 #ifdef CONFIG_SMP
 DEFINE_PER_CPU(struct mm_struct *, current_mm);
+EXPORT_PER_CPU_SYMBOL_GPL(current_mm);
 #endif
 
 #if defined(CONFIG_IPIPE) && defined(CONFIG_SMP)
