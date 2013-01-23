@@ -1660,7 +1660,7 @@ void __ipipe_spin_unlock_debug(unsigned long flags)
 	 */
 	IPIPE_WARN_ONCE(!raw_irqs_disabled_flags(flags) && hard_irqs_disabled());
 }
-EXPORT_SYMBOL_GPL(__ipipe_spin_unlock_debug);
+EXPORT_SYMBOL(__ipipe_spin_unlock_debug);
 
 #endif /* CONFIG_IPIPE_DEBUG_INTERNAL && CONFIG_SMP */
 
