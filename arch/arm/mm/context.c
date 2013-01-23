@@ -175,11 +175,12 @@ static inline void set_mm_context(struct mm_struct *mm, unsigned int asid)
 
 void __new_context(struct mm_struct *mm)
 {
-	int cpu = ipipe_processor_id();
 	unsigned long flags;
 	unsigned int asid;
+	int cpu;
 
 	asid_lock(flags);
+	cpu = ipipe_processor_id();
 #ifdef CONFIG_SMP
 	/*
 	 * Check the ASID again, in case the change was broadcast from
