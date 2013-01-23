@@ -62,7 +62,7 @@ DEFINE_PER_CPU(struct ipipe_percpu_data, ipipe_percpu) = {
 	.context_check = 1,
 #endif
 };
-EXPORT_PER_CPU_SYMBOL_GPL(ipipe_percpu);
+EXPORT_PER_CPU_SYMBOL(ipipe_percpu);
 
 /* Up to 2k of pending work data per CPU. */
 #define WORKBUF_SIZE 2048
@@ -401,7 +401,7 @@ void ipipe_unstall_root(void)
 
 	hard_local_irq_enable();
 }
-EXPORT_SYMBOL_GPL(ipipe_unstall_root);
+EXPORT_SYMBOL(ipipe_unstall_root);
 
 void ipipe_restore_root(unsigned long x)
 {
@@ -412,7 +412,7 @@ void ipipe_restore_root(unsigned long x)
 	else
 		ipipe_unstall_root();
 }
-EXPORT_SYMBOL_GPL(ipipe_restore_root);
+EXPORT_SYMBOL(ipipe_restore_root);
 
 void __ipipe_restore_root_nosync(unsigned long x)
 {
