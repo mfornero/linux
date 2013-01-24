@@ -29,6 +29,8 @@
 
 #include <linux/clk.h>
 #include <linux/err.h>
+#include <linux/ipipe.h>
+#include <linux/ipipe_tickdev.h>
 
 #include <asm/smp_twd.h>
 
@@ -117,6 +119,16 @@ static void xttcpss_set_interval(struct xttcpss_timer *timer,
 	__raw_writel(ctrl_reg, timer->base_addr + XTTCPSS_CNT_CNTRL_OFFSET);
 }
 
+/* 
+	Ack the timer interrupt
+*/
+static inline void xttcpss_timer_ack(void){
+	
+	/* Acknowledge the interrupt */
+	__raw_readl(timers[XTTCPSS_CLOCKEVENT].base_addr + XTTCPSS_ISR_OFFSET);
+	
+}
+
 /**
  * xttcpss_clock_event_interrupt - Clock event timer interrupt handler
  *
@@ -128,15 +140,23 @@ static void xttcpss_set_interval(struct xttcpss_timer *timer,
 static irqreturn_t xttcpss_clock_event_interrupt(int irq, void *dev_id)
 {
 	struct clock_event_device *evt = &xttcpss_clockevent;
-	struct xttcpss_timer *timer = dev_id;
 
-	/* Acknowledge the interrupt and call event handler */
-	__raw_readl(timer->base_addr + XTTCPSS_ISR_OFFSET);
-
+	if (!clockevent_ipipe_stolen(evt))
+		xttcpss_timer_ack();
+	
+	/* call event handler */	
 	evt->event_handler(evt);
 
 	return IRQ_HANDLED;
 }
+
+
+#ifdef CONFIG_IPIPE
+
+static struct ipipe_timer xttcpss_itimer = {
+	.ack = xttcpss_timer_ack,
+};
+#endif
 
 static struct irqaction event_timer_irq = {
 	.name	= "xttcpss clockevent",
@@ -262,7 +282,10 @@ static struct clock_event_device xttcpss_clockevent = {
 	.features	= CLOCK_EVT_FEAT_PERIODIC | CLOCK_EVT_FEAT_ONESHOT,
 	.set_next_event	= xttcpss_set_next_event,
 	.set_mode	= xttcpss_set_mode,
-	.rating		= 200,
+	.rating		= 400,
+#ifdef CONFIG_IPIPE
+	.ipipe_timer = &xttcpss_itimer,
+#endif
 };
 
 static int xttcpss_timer_rate_change_cb(struct notifier_block *nb,
@@ -373,10 +396,6 @@ void __init xttcpss_timer_init(void)
 	   (used for the event source) interrupt number is +1 from the 1st timer
 	 */
 	event_timer_irq.dev_id = &timers[XTTCPSS_CLOCKEVENT];
-	setup_irq(irq, &event_timer_irq);
-
-	printk(KERN_INFO "%s #0 at 0x%08x, irq=%d\n",
-		timer_list[0], timer_baseaddr, irq);
 
 	/*
 	 * If there is clock-frequency property then use it, otherwise use a
@@ -424,6 +443,14 @@ void __init xttcpss_timer_init(void)
 			pr_warn("Unable to register clock notifier.\n");
 	}
 
+#ifdef CONFIG_IPIPE
+	xttcpss_itimer.irq = irq;
+	xttcpss_itimer.freq = timers[XTTCPSS_CLOCKEVENT].frequency;
+#endif		
+
+	printk(KERN_INFO "%s #0 at 0x%08x, irq=%d\n",
+		timer_list[0], timer_baseaddr, irq);
+	
 	xttcpss_timer_hardware_init();
 	clocksource_register_hz(&clocksource_xttcpss,
 				timers[XTTCPSS_CLOCKSOURCE].frequency);
@@ -432,6 +459,9 @@ void __init xttcpss_timer_init(void)
 	xttcpss_clockevent.cpumask = cpumask_of(0);
 	clockevents_config_and_register(&xttcpss_clockevent,
 			timers[XTTCPSS_CLOCKEVENT].frequency, 1, 0xfffe);
+
+	setup_irq(irq, &event_timer_irq);
+			
 #ifdef CONFIG_HAVE_ARM_TWD
 	twd_local_timer_of_register();
 #endif
