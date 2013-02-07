@@ -45,10 +45,10 @@ restore:
 	CFI_ENDPROC
 
 #ifdef CONFIG_IPIPE
-	/* rdi:	arg1 ... normal C conventions. rax is passed from C. */ 	
+	/* rdi:	arg1 ... normal C conventions. rax is passed from C. */
 	.macro THUNK_RETRAX name,func
 	.globl \name
-\name:	
+\name:
 	CFI_STARTPROC
 	SAVE_ARGS
 	call \func
@@ -59,7 +59,7 @@ restore:
 
 	CFI_STARTPROC
 	SAVE_ARGS
-restore_norax:	
+restore_norax:
 	RESTORE_ARGS 0
 	ret
 	CFI_ENDPROC

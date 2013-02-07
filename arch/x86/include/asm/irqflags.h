@@ -77,7 +77,7 @@ static inline int native_irqs_disabled(void)
 static inline notrace unsigned long arch_local_save_flags(void)
 {
 #ifdef CONFIG_IPIPE
- 	unsigned long flags;
+	unsigned long flags;
 
 	flags = (!ipipe_test_root()) << 9;
 	barrier();

@@ -82,7 +82,7 @@ static void unmask_8259A_irq(unsigned int irq)
 	if (cached_irq_mask & mask) {
 		cached_irq_mask &= ~mask;
 		if (irq & 8)
- 			outb(cached_slave_mask, PIC_SLAVE_IMR);
+			outb(cached_slave_mask, PIC_SLAVE_IMR);
 		else
 			outb(cached_master_mask, PIC_MASTER_IMR);
 		ipipe_unlock_irq(irq);

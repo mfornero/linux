@@ -61,12 +61,11 @@ static inline void
 __default_send_IPI_shortcut(unsigned int shortcut, int vector, unsigned int dest)
 {
 	/*
-	 * Subtle. In the case of the 'never do double writes'
-	 * workaround we have to lock out interrupts to be safe.  As
-	 * we don't care of the value read we use an atomic rmw access
-	 * to avoid costly cli/sti (except if running the interrupt
-	 * pipeline).  Otherwise we use an even cheaper single atomic
-	 * write to the APIC.
+	 * Subtle. In the case of the 'never do double writes' workaround
+	 * we have to lock out interrupts to be safe.  As we don't care
+	 * of the value read we use an atomic rmw access to avoid costly
+	 * cli/sti (except if running the interrupt pipeline).  Otherwise
+	 * we use an even cheaper single atomic write to the APIC.
 	 */
 	unsigned int cfg, flags;
 

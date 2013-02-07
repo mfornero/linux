@@ -557,7 +557,7 @@ ENTRY(ret_from_fork)
 
 	pushq_cfi $0x0002
 	popfq_cfi				# reset kernel eflags
-  	HARD_COND_ENABLE_INTERRUPTS
+	HARD_COND_ENABLE_INTERRUPTS
 
 	call schedule_tail			# rdi: 'prev' task parameter
 
@@ -1027,7 +1027,7 @@ END(interrupt)
 
 /* 0(%rsp): ~(interrupt number) */
 	.macro interrupt func
-	/* Reserve pt_regs for scratch regs and rbp */
+	/* reserve pt_regs for scratch regs and rbp */
 	subq $ORIG_RAX-RBP, %rsp
 	CFI_ADJUST_CFA_OFFSET ORIG_RAX-RBP
 	SAVE_ARGS_IRQ

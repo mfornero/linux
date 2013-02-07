@@ -400,7 +400,6 @@ static void __ioapic_write_entry(int apic, int pin, struct IO_APIC_route_entry e
 	union entry_union eu = {{0, 0}};
 
 	eu.entry = e;
-
 	io_apic_write(apic, 0x11 + 2*pin, eu.w2);
 	io_apic_write(apic, 0x10 + 2*pin, eu.w1);
 }
@@ -535,7 +534,7 @@ static void mask_ioapic(unsigned int irq, struct irq_cfg *cfg)
 	unsigned long flags;
 
 	raw_spin_lock_irqsave(&ioapic_lock, flags);
-  	ipipe_lock_irq(irq);
+	ipipe_lock_irq(irq);
 	__mask_ioapic(cfg);
 	raw_spin_unlock_irqrestore(&ioapic_lock, flags);
 }
@@ -630,7 +629,7 @@ static inline void eoi_ioapic_irq(unsigned int irq, struct irq_cfg *cfg)
 
 	raw_spin_lock_irqsave(&ioapic_lock, flags);
 	__eoi_ioapic_irq(cfg);
- 	raw_spin_unlock_irqrestore(&ioapic_lock, flags);
+	raw_spin_unlock_irqrestore(&ioapic_lock, flags);
 }
 
 #endif /* !CONFIG_IPIPE || CONFIG_SMP */
@@ -1298,8 +1297,8 @@ static inline int IO_APIC_irq_trigger(int irq)
 		}
 	}
 	/*
-	 * nonexistent IRQs are edge default
-	 */
+         * nonexistent IRQs are edge default
+         */
 	return 0;
 }
 #else
@@ -2210,7 +2209,7 @@ static unsigned int startup_ioapic_irq(struct irq_data *data)
 			was_pending = 1;
 	}
 	__unmask_ioapic(data->chip_data);
- 	ipipe_unlock_irq(irq);
+	ipipe_unlock_irq(irq);
 	raw_spin_unlock_irqrestore(&ioapic_lock, flags);
 
 	return was_pending;
@@ -2744,22 +2743,22 @@ static void mask_lapic_irq(struct irq_data *data)
 {
 	unsigned long v, flags;
 
- 	flags = hard_cond_local_irq_save();
- 	ipipe_lock_irq(data->irq);
+	flags = hard_cond_local_irq_save();
+	ipipe_lock_irq(data->irq);
 	v = apic_read(APIC_LVT0);
 	apic_write(APIC_LVT0, v | APIC_LVT_MASKED);
-  	hard_cond_local_irq_restore(flags);
+	hard_cond_local_irq_restore(flags);
 }
 
 static void unmask_lapic_irq(struct irq_data *data)
 {
 	unsigned long v, flags;
 
-  	flags = hard_cond_local_irq_save();
+	flags = hard_cond_local_irq_save();
 	v = apic_read(APIC_LVT0);
 	apic_write(APIC_LVT0, v & ~APIC_LVT_MASKED);
-  	ipipe_unlock_irq(data->irq);
-  	hard_cond_local_irq_restore(flags);
+	ipipe_unlock_irq(data->irq);
+	hard_cond_local_irq_restore(flags);
 }
 
 static void ack_lapic_irq(struct irq_data *data)
@@ -3046,8 +3045,8 @@ void __init setup_IO_APIC(void)
 
 	apic_printk(APIC_VERBOSE, "ENABLING IO-APIC IRQs\n");
 	/*
-	 * Set up IO-APIC IRQ routing.
-	 */
+         * Set up IO-APIC IRQ routing.
+         */
 	x86_init.mpparse.setup_ioapic_ids();
 
 	sync_Arb_IDs();

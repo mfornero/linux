@@ -875,7 +875,7 @@ static int __cpuinit do_boot_cpu(int apicid, int cpu, struct task_struct *idle)
 int __cpuinit native_cpu_up(unsigned int cpu, struct task_struct *tidle)
 {
 	int apicid = apic->cpu_present_to_apicid(cpu);
- 	unsigned long vflags, rflags;
+	unsigned long vflags, rflags;
 	int err;
 
 	WARN_ON(irqs_disabled());

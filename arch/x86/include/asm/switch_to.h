@@ -106,9 +106,9 @@ do {									\
 	     "movq %%rsp,%P[threadrsp](%[prev])\n\t" /* save RSP */	  \
 	     "movq %P[threadrsp](%[next]),%%rsp\n\t" /* restore RSP */	  \
 	     "movq $thread_return,%P[threadrip](%[prev])\n\t" /* save RIP */	  \
- 	     "pushq %P[threadrip](%[next])\n\t" /* restore RIP */	  \
- 	     "jmp __switch_to\n\t"					  \
-  	     ".globl thread_return\n\t"					  \
+	     "pushq %P[threadrip](%[next])\n\t" /* restore RIP */	  \
+	     "jmp __switch_to\n\t"					  \
+	     ".globl thread_return\n\t"					  \
 	     "thread_return:\n\t"					  \
 	     "movq "__percpu_arg([current_task])",%%rsi\n\t"		  \
 	     __switch_canary						  \
