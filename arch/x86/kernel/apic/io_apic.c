@@ -3381,6 +3381,9 @@ static struct irq_chip dmar_msi_type = {
 	.irq_ack		= ack_apic_edge,
 	.irq_set_affinity	= dmar_msi_set_affinity,
 	.irq_retrigger		= ioapic_retrigger_irq,
+#ifdef CONFIG_IPIPE
+	.irq_move		= move_xxapic_irq,
+#endif
 };
 
 int arch_setup_dmar_msi(unsigned int irq)
@@ -3429,6 +3432,9 @@ static struct irq_chip hpet_msi_type = {
 	.irq_ack = ack_apic_edge,
 	.irq_set_affinity = hpet_msi_set_affinity,
 	.irq_retrigger = ioapic_retrigger_irq,
+#ifdef CONFIG_IPIPE
+	.irq_move		= move_xxapic_irq,
+#endif
 };
 
 int arch_setup_hpet_msi(unsigned int irq, unsigned int id)
