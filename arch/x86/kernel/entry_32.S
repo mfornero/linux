@@ -571,7 +571,7 @@ ENTRY(system_call)
 	pushl_cfi %eax			# save orig_eax
 	SAVE_ALL
 	GET_THREAD_INFO(%ebp)
- 	CATCH_ROOT_SYSCALL(syscall_exit,restore_nocheck)
+	CATCH_ROOT_SYSCALL(syscall_exit,restore_nocheck)
 					# system call tracing in operation / emulation
 	testl $_TIF_WORK_SYSCALL_ENTRY,TI_flags(%ebp)
 	jnz syscall_trace_entry
@@ -610,7 +610,7 @@ irq_return:
 .section .fixup,"ax"
 ENTRY(iret_exc)
 	pushl $0			# no error code
-  	PUSH_XCODE(do_iret_error)
+	PUSH_XCODE(do_iret_error)
 	jmp error_code
 .previous
 	_ASM_EXTABLE(irq_return,iret_exc)
@@ -901,7 +901,7 @@ ENTRY(name)				\
 	pushl_cfi $~(nr);		\
 	SAVE_ALL;			\
 	IPIPE_TRACE_IRQ_ENTER;		\
- 	movl %esp, %eax;		\
+	movl %esp, %eax;		\
 	call __ipipe_handle_irq;	\
 	IPIPE_TRACE_IRQ_EXIT;		\
 	testl %eax,%eax;		\
@@ -1464,7 +1464,7 @@ debug_stack_correct:
 	pushl_cfi $-1			# mark this as an int
 	SAVE_ALL
 	TRACE_IRQS_OFF
- 	DIVERT_EXCEPTION(do_debug)
+	DIVERT_EXCEPTION(do_debug)
 	xorl %edx,%edx			# error code 0
 	movl %esp,%eax			# pt_regs pointer
 	call do_debug
@@ -1557,7 +1557,7 @@ ENTRY(int3)
 	pushl_cfi $-1			# mark this as an int
 	SAVE_ALL
 	TRACE_IRQS_OFF
- 	DIVERT_EXCEPTION(do_int3)
+	DIVERT_EXCEPTION(do_int3)
 	xorl %edx,%edx		# zero error code
 	movl %esp,%eax		# pt_regs pointer
 	call do_int3
