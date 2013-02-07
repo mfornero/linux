@@ -12,7 +12,7 @@
 	};
 
 	chosen {
-		bootargs = "console=ttyPS0,115200 debug loglevel=7 root=/dev/mmcblk0p2 rw earlyprintk rootfstype=ext4 rootwait devtmpfs.mount=1";
+		bootargs = "console=ttyPS0,115200 root=/dev/mmcblk0p2 rw earlyprintk rootfstype=ext4 rootwait devtmpfs.mount=1";
 		linux,stdout-path = "/axi@0/serial@e0001000";
 	};
 
@@ -338,7 +338,7 @@
 			interrupt-parent = <0x1>;
 			interrupts = <0x0 0x18 0x4>;
 			reg = <0xe0100000 0x1000>;
-			xlnx,has-cd = <0x1>;
+			xlnx,has-cd = <0x0>;
 			xlnx,has-power = <0x0>;
 			xlnx,has-wp = <0x1>;
 			xlnx,sdio-clk-freq-hz = <0x2faf080>;
