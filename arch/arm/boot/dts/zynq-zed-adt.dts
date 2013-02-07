@@ -12,7 +12,7 @@
 	};
 
 	chosen {
-		bootargs = "console=ttyPS0,115200 root=/dev/mmcblk0p2 rw earlyprintk rootfstype=ext4 rootwait devtmpfs.mount=1";
+		bootargs = "console=ttyPS0,115200 root=/dev/mmcblk0p2 rw earlyprintk rootfstype=ext2 rootwait devtmpfs.mount=1";
 		linux,stdout-path = "/axi@0/serial@e0001000";
 	};
 
