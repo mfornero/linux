@@ -1,11 +1,16 @@
 #!/bin/bash
-ROOTFS_DIR=/Working/rootfs
-ROOTFS_STAGING=${ROOTFS_DIR}/_rootfs
+PARBUILD=-j8
 
 if [ x${1} = x ]; then
 	BUILDARCH=arm
 else
 	BUILDARCH=$1
+fi
+
+if [ x${2} = x ]; then
+	LOCAL_VER=
+else
+	LOCAL_VER=$2
 fi
 
 case $BUILDARCH in
@@ -14,10 +19,10 @@ case $BUILDARCH in
 		KERN=zImage
 		DEFCONFIG=xilinx_zynq_adt_defconfig
 	;;
-	i386)
-		CC_TOOL=i686-pc-linux-gnu-
+	x86_64)
+		CC_TOOL=x86_64-corei7-linux-gnu-
 		KERN=bzImage
-		DEFCONFIG=i386_adt_defconfig
+		DEFCONFIG=x86_64_adt_defconfig
 	;;
 	*)
 	echo "Unknown architecture!"
@@ -27,16 +32,11 @@ esac
 
 # Setup the .config file
 make ARCH=${BUILDARCH} ${DEFCONFIG}
-# Build and install the kernel and modules
-make -j4 ARCH=${BUILDARCH} CROSS_COMPILE=${CC_TOOL} ${KERN} modules 
-#make ARCH=${BUILDARCH} CROSS_COMPILE=${CC_TOOL} INSTALL_MOD_PATH=${ROOTFS_STAGING} modules_install
-# Remove the symlinks
-#for D in `ls ${ROOTFS_STAGING}/lib/modules/`; do
-#	rm ${ROOTFS_STAGING}/lib/modules/${D}/source
-#	rm ${ROOTFS_STAGING}/lib/modules/${D}/build
-#done
 
-#if [ $BUILDARCH = arm ]; then
-#	# Build the device tree
-#	./scripts/dtc/dtc -I dts -O dtb -o ${ROOTFS_DIR}/misc/devicetree.dtb arch/arm/boot/dts/zynq-zed-adt.dts
-#fi
+if [ x${LOCAL_VER} != x ]; then
+	echo "Setting local version to ${LOCAL_VER}"
+	./scripts/config --set-str CONFIG_LOCALVERSION ${LOCAL_VER}
+fi
+
+# Build and install the kernel and modules
+make ${PARBUILD} ARCH=${BUILDARCH} CROSS_COMPILE=${CC_TOOL} ${KERN} modules 
