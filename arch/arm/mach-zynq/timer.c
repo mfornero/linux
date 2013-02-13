@@ -282,7 +282,7 @@ static struct clock_event_device xttcpss_clockevent = {
 	.features	= CLOCK_EVT_FEAT_PERIODIC | CLOCK_EVT_FEAT_ONESHOT,
 	.set_next_event	= xttcpss_set_next_event,
 	.set_mode	= xttcpss_set_mode,
-	.rating		= 400,
+	.rating		= 200,
 #ifdef CONFIG_IPIPE
 	.ipipe_timer = &xttcpss_itimer,
 #endif
