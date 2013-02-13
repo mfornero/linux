@@ -75,9 +75,16 @@
 /* Setup the timers to use pre-scaling, using a fixed value for now that will work
  * across most input frequency, but it may need to be more dynamic
  */
-#define PRESCALE_EXPONENT 	11	/* 2 ^ PRESCALE_EXPONENT = PRESCALE */
-#define PRESCALE 		2048	/* The exponent must match this */
-#define CLK_CNTRL_PRESCALE (((PRESCALE_EXPONENT - 1) << 1) | 0x1)
+#define PRESCALE_EXPONENT      8       /* 2 ^ PRESCALE_EXPONENT = PRESCALE */
+#define PRESCALE               (2 << (PRESCALE_EXPONENT - 1))
+#define CLK_CNTRL_PRESCALE     (((PRESCALE_EXPONENT - 1) << 1) | 0x1)
+
+#define PRESCALE_EXPONENT_EV   5       /* 2 ^ PRESCALE_EXPONENT = PRESCALE */
+#define PRESCALE_EV            (2 << (PRESCALE_EXPONENT_EV - 1))
+#define CLK_CNTRL_PRESCALE_EV  (((PRESCALE_EXPONENT_EV - 1) << 1) | 0x1)
+
+unsigned max_delta_ticks;
+
 
 /**
  * struct xttcpss_timer - This definition defines local timer structure
@@ -143,7 +150,11 @@ static irqreturn_t xttcpss_clock_event_interrupt(int irq, void *dev_id)
 
 	if (!clockevent_ipipe_stolen(evt))
 		xttcpss_timer_ack();
-	
+
+	if (num_possible_cpus() == 1)
+		__ipipe_tsc_update();
+
+		
 	/* call event handler */	
 	evt->event_handler(evt);
 
@@ -156,7 +167,16 @@ static irqreturn_t xttcpss_clock_event_interrupt(int irq, void *dev_id)
 static struct ipipe_timer xttcpss_itimer = {
 	.ack = xttcpss_timer_ack,
 };
-#endif
+
+static struct __ipipe_tscinfo tsc_info = {
+	.type = IPIPE_TSC_TYPE_FREERUNNING,
+	.u = {
+		{
+			.mask = 0x0000ffff,
+		},
+	},
+};
+#endif /* CONFIG_IPIPE */
 
 static struct irqaction event_timer_irq = {
 	.name	= "xttcpss clockevent",
@@ -190,7 +210,7 @@ static void __init xttcpss_timer_hardware_init(void)
 	 */
 	__raw_writel(0x23, timers[XTTCPSS_CLOCKEVENT].base_addr +
 			XTTCPSS_CNT_CNTRL_OFFSET);
-	__raw_writel(CLK_CNTRL_PRESCALE,
+	__raw_writel(CLK_CNTRL_PRESCALE_EV,
 			timers[XTTCPSS_CLOCKEVENT].base_addr +
 			XTTCPSS_CLK_CNTRL_OFFSET);
 	__raw_writel(0x1, timers[XTTCPSS_CLOCKEVENT].base_addr +
@@ -234,6 +254,12 @@ static int xttcpss_set_next_event(unsigned long cycles,
 					struct clock_event_device *evt)
 {
 	struct xttcpss_timer *timer = &timers[XTTCPSS_CLOCKEVENT];
+#ifdef CONFIG_IPIPE
+	if (cycles > max_delta_ticks)
+		cycles = max_delta_ticks;
+#endif
+
+	__ipipe_tsc_update();
 
 	xttcpss_set_interval(timer, cycles);
 	return 0;
@@ -285,7 +311,7 @@ static struct clock_event_device xttcpss_clockevent = {
 	.rating		= 200,
 #ifdef CONFIG_IPIPE
 	.ipipe_timer = &xttcpss_itimer,
-#endif
+#endif /* CONFIG_IPIPE */
 };
 
 static int xttcpss_timer_rate_change_cb(struct notifier_block *nb,
@@ -301,7 +327,7 @@ static int xttcpss_timer_rate_change_cb(struct notifier_block *nb,
 		timers[XTTCPSS_CLOCKSOURCE].frequency =
 			ndata->new_rate / PRESCALE;
 		timers[XTTCPSS_CLOCKEVENT].frequency =
-			ndata->new_rate / PRESCALE;
+			ndata->new_rate / PRESCALE_EV;
 
 		/* Do whatever is necessare to maintain a proper time base */
 		/*
@@ -418,11 +444,11 @@ void __init xttcpss_timer_init(void)
 		}
 		if (prop2) {
 			timers[XTTCPSS_CLOCKEVENT].frequency =
-				be32_to_cpup(prop2) / PRESCALE;
+				be32_to_cpup(prop2) / PRESCALE_EV;
 		} else {
 			pr_err("Error, no clock-frequency specified for timer\n");
 			timers[XTTCPSS_CLOCKEVENT].frequency =
-				PERIPHERAL_CLOCK_RATE / PRESCALE;
+				PERIPHERAL_CLOCK_RATE / PRESCALE_EV;
 		}
 	} else {
 		clk_prepare_enable(clk);
@@ -437,16 +463,34 @@ void __init xttcpss_timer_init(void)
 		timers[XTTCPSS_CLOCKSOURCE].frequency =
 			clk_get_rate(clk) / PRESCALE;
 		timers[XTTCPSS_CLOCKEVENT].frequency =
-			clk_get_rate(clk) / PRESCALE;
+			clk_get_rate(clk) / PRESCALE_EV;
 		if (clk_notifier_register(clk,
 			&timers[XTTCPSS_CLOCKSOURCE].clk_rate_change_nb))
 			pr_warn("Unable to register clock notifier.\n");
 	}
 
 #ifdef CONFIG_IPIPE
+	if (num_possible_cpus() == 1) {
+		struct resource res;
+
+		tsc_info.freq = timers[XTTCPSS_CLOCKSOURCE].frequency;
+		tsc_info.counter_vaddr =
+			(unsigned long)timers[XTTCPSS_CLOCKSOURCE].base_addr +
+			XTTCPSS_COUNT_VAL_OFFSET;
+		of_address_to_resource(timer, 0, &res);
+		tsc_info.u.counter_paddr = res.start + XTTCPSS_COUNT_VAL_OFFSET;
+
+		__ipipe_tsc_register(&tsc_info);
+	}
+
 	xttcpss_itimer.irq = irq;
 	xttcpss_itimer.freq = timers[XTTCPSS_CLOCKEVENT].frequency;
-#endif		
+	max_delta_ticks = 0xffff - xttcpss_itimer.freq / 1000;
+	xttcpss_itimer.min_delay_ticks = 1;
+	printk(KERN_INFO "I-pipe, %lu.%03lu MHz timer\n",
+	       xttcpss_itimer.freq / 1000000,
+	       (xttcpss_itimer.freq % 1000000) / 1000);
+#endif /* CONFIG_IPIPE */		
 
 	printk(KERN_INFO "%s #0 at 0x%08x, irq=%d\n",
 		timer_list[0], timer_baseaddr, irq);
