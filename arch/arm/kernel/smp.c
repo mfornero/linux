@@ -449,7 +449,7 @@ void __ipipe_ipis_alloc(void)
 		return;
 
 	/* __ipipe_first_ipi is 0 here  */
-	ipi_nr = IPI_IPIPE_FIRST + IPIPE_LAST_IPI;
+	ipi_nr = IPI_IPIPE_FIRST + IPIPE_LAST_IPI + 1;
 
 	for (virq = IPIPE_IPI_BASE; virq < IPIPE_IPI_BASE + ipi_nr; virq++) {
 		_virq = ipipe_alloc_virq();
