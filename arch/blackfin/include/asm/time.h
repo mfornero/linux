@@ -43,4 +43,12 @@ extern void bfin_coretmr_init(void);
 extern void bfin_coretmr_clockevent_init(void);
 #endif
 
+#if !defined(CONFIG_GENERIC_CLOCKEVENTS) || defined(CONFIG_TICKSOURCE_GPTMR0)
+#ifdef CONFIG_IPIPE
+extern void bfin_ipipe_coretmr_register(void)
+#else /* !CONFIG_IPIPE */
+#define bfin_ipipe_coretmr_register() do { } while (0)
+#endif /* !CONFIG_IPIPE */
+#endif
+
 #endif
