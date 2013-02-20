@@ -18,9 +18,7 @@
 #include <linux/sched.h>
 #include <linux/syscore_ops.h>
 #include <asm/delay.h>
-#ifdef CONFIG_IPIPE
 #include <linux/ipipe.h>
-#endif
 #include <asm/traps.h>
 #include <asm/blackfin.h>
 #include <asm/gpio.h>
@@ -562,14 +560,7 @@ static struct irq_chip bfin_sec_irqchip = {
 
 void bfin_handle_irq(unsigned irq)
 {
-#ifdef CONFIG_IPIPE
-	struct pt_regs regs;    /* Contents not used. */
-	ipipe_trace_irq_entry(irq);
-	__ipipe_handle_irq(irq, &regs);
-	ipipe_trace_irq_exit(irq);
-#else /* !CONFIG_IPIPE */
-	generic_handle_irq(irq);
-#endif  /* !CONFIG_IPIPE */
+	ipipe_handle_demuxed_irq(irq);
 }
 
 #if defined(CONFIG_BFIN_MAC) || defined(CONFIG_BFIN_MAC_MODULE)
@@ -1626,7 +1617,7 @@ void do_irq(int vec, struct pt_regs *fp)
 
 #ifdef CONFIG_IPIPE
 
-int __ipipe_get_irq_priority(unsigned irq)
+int __ipipe_get_irq_priority(unsigned int irq)
 {
 	int ient, prio;
 
@@ -1658,25 +1649,25 @@ __attribute__((l1_text))
 #endif
 asmlinkage int __ipipe_grab_irq(int vec, struct pt_regs *regs)
 {
-	struct ipipe_percpu_domain_data *p = ipipe_root_cpudom_ptr();
+	struct ipipe_percpu_domain_data *p = ipipe_this_cpu_root_context();
+	struct ipipe_percpu_data *q = __ipipe_this_cpu_ptr(&ipipe_percpu);
 	struct ipipe_domain *this_domain = __ipipe_current_domain;
+	struct pt_regs *tick_regs;
 	int irq, s = 0;
 
 	irq = vec_to_irq(vec);
 	if (irq == -1)
 		return 0;
 
-	if (irq == IRQ_SYSTMR) {
-#if !defined(CONFIG_GENERIC_CLOCKEVENTS) || defined(CONFIG_TICKSOURCE_GPTMR0)
-		bfin_write_TIMER_STATUS(1); /* Latch TIMIL0 */
-#endif
+	if (irq == q->hrtimer_irq || q->hrtimer_irq == -1) {
 		/* This is basically what we need from the register frame. */
-		__raw_get_cpu_var(__ipipe_tick_regs).ipend = regs->ipend;
-		__raw_get_cpu_var(__ipipe_tick_regs).pc = regs->pc;
+		tick_regs = &q->tick_regs;
+		tick_regs->ipend = regs->ipend;
+		tick_regs->pc = regs->pc;
 		if (this_domain != ipipe_root_domain)
-			__raw_get_cpu_var(__ipipe_tick_regs).ipend &= ~0x10;
+			tick_regs->ipend &= ~0x10;
 		else
-			__raw_get_cpu_var(__ipipe_tick_regs).ipend |= 0x10;
+			tick_regs->ipend |= 0x10;
 	}
 
 	/*
@@ -1705,7 +1696,7 @@ asmlinkage int __ipipe_grab_irq(int vec, struct pt_regs *regs)
 
 	if (user_mode(regs) &&
 	    !ipipe_test_foreign_stack() &&
-	    (current->ipipe_flags & PF_EVTRET) != 0) {
+	    (current->ipipe.flags & PF_MAYDAY) != 0) {
 		/*
 		 * Testing for user_regs() does NOT fully eliminate
 		 * foreign stack contexts, because of the forged
@@ -1717,13 +1708,13 @@ asmlinkage int __ipipe_grab_irq(int vec, struct pt_regs *regs)
 		 * which case user_mode() is now true, and the event
 		 * gets dispatched spuriously.
 		 */
-		current->ipipe_flags &= ~PF_EVTRET;
-		__ipipe_dispatch_event(IPIPE_EVENT_RETURN, regs);
+		current->ipipe.flags &= ~PF_MAYDAY;
+		__ipipe_notify_trap(IPIPE_TRAP_MAYDAY, regs);
 	}
 
 	if (this_domain == ipipe_root_domain) {
 		set_thread_flag(TIF_IRQ_SYNC);
-		if (!s) {
+		if (s == 0) {
 			__clear_bit(IPIPE_SYNCDEFER_FLAG, &p->status);
 			return !test_bit(IPIPE_STALL_FLAG, &p->status);
 		}
