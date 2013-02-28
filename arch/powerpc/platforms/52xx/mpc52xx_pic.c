@@ -195,10 +195,19 @@ static void mpc52xx_extirq_unmask(struct irq_data *d)
 	hard_local_irq_restore(flags);
 }
 
+static void mpc52xx_extirq_mask_ack(struct irq_data *d)
+{
+	int l2irq = irqd_to_hwirq(d) & MPC52xx_IRQ_L2_MASK;
+
+	__io_be_clrbit(&intr->ctrl, 11 - l2irq);
+	__io_be_setbit(&intr->ctrl, 27 - l2irq);
+}
+
 static void mpc52xx_extirq_ack(struct irq_data *d)
 {
 	int l2irq = irqd_to_hwirq(d) & MPC52xx_IRQ_L2_MASK;
-	__io_be_setbit(&intr->ctrl, 27-l2irq);
+
+	__io_be_setbit(&intr->ctrl, 27 - l2irq);
 }
 
 static int mpc52xx_extirq_set_type(struct irq_data *d, unsigned int flow_type)
@@ -233,6 +242,7 @@ static struct irq_chip mpc52xx_extirq_irqchip = {
 	.name = "MPC52xx External",
 	.irq_mask = mpc52xx_extirq_mask,
 	.irq_unmask = mpc52xx_extirq_unmask,
+	.irq_mask_ack = mpc52xx_extirq_mask_ack,
 	.irq_ack = mpc52xx_extirq_ack,
 	.irq_set_type = mpc52xx_extirq_set_type,
 };
