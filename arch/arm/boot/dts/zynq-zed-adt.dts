@@ -255,7 +255,17 @@
 				};
 			};
 		};
-
+		
+		ps7-i2c@e0004000 {
+			compatible = "xlnx,ps7-i2c-1.00.a";
+			reg = <0xE0004000 0x1000>;
+			interrupts = <0 25 4>;
+			interrupt-parent = <0x1>;
+			bus-id = <0>;
+			input-clk = <111111111>;
+			i2c-clk = <100000>;
+		};
+		
 		ps7-gpio@e000a000 {
 			#gpio-cells = <0x2>;
 			compatible = "xlnx,ps7-gpio-1.00.a";
