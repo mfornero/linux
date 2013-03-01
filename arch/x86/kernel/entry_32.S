@@ -1463,8 +1463,8 @@ ENTRY(debug)
 debug_stack_correct:
 	pushl_cfi $-1			# mark this as an int
 	SAVE_ALL
-	TRACE_IRQS_OFF
 	DIVERT_EXCEPTION(do_debug)
+	TRACE_IRQS_OFF
 	xorl %edx,%edx			# error code 0
 	movl %esp,%eax			# pt_regs pointer
 	call do_debug
@@ -1556,8 +1556,8 @@ ENTRY(int3)
 	ASM_CLAC
 	pushl_cfi $-1			# mark this as an int
 	SAVE_ALL
-	TRACE_IRQS_OFF
 	DIVERT_EXCEPTION(do_int3)
+	TRACE_IRQS_OFF
 	xorl %edx,%edx		# zero error code
 	movl %esp,%eax		# pt_regs pointer
 	call do_int3

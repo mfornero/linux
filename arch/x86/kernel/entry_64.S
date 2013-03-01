@@ -1386,16 +1386,18 @@ ENTRY(\sym)
 	subq $ORIG_RAX-R15, %rsp
 	CFI_ADJUST_CFA_OFFSET ORIG_RAX-R15
 	call save_paranoid
-	TRACE_IRQS_OFF_DEBUG
 	movq %rsp,%rdi		/* pt_regs pointer */
 #ifdef CONFIG_IPIPE
 	.if \ex_code
 	movq $\ex_code,%rsi
 	call __ipipe_divert_exception   /* handle(regs, ex_code) */
+	TRACE_IRQS_OFF_DEBUG
 	testl %eax,%eax
 	jnz 1f
 	movq %rsp,%rdi
 	.endif
+#else
+	TRACE_IRQS_OFF_DEBUG
 #endif
 	xorl %esi,%esi		/* no error code */
 	subq $EXCEPTION_STKSZ, INIT_TSS_IST(\ist)
@@ -1453,16 +1455,18 @@ ENTRY(\sym)
 	CFI_ADJUST_CFA_OFFSET ORIG_RAX-R15
 	call save_paranoid
 	DEFAULT_FRAME 0
-	TRACE_IRQS_OFF
 	movq %rsp,%rdi			/* pt_regs pointer */
 #ifdef CONFIG_IPIPE
 	.if \ex_code
 	movq $\ex_code,%rsi
 	call __ipipe_divert_exception   /* handle(regs, ex_code) */
+	TRACE_IRQS_OFF
 	testl %eax,%eax
 	jnz 1f
 	movq %rsp,%rdi
 	.endif
+#else
+	TRACE_IRQS_OFF
 #endif
 	movq ORIG_RAX(%rsp),%rsi	/* get error code */
 	movq $-1,ORIG_RAX(%rsp)		/* no syscall to restart */
