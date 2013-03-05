@@ -214,11 +214,13 @@
 			phy_type = "ulpi";
 		};
 
-		gpio@e000a000 {
+		gpio: gpio@e000a000 {
 			compatible = "xlnx,ps7-gpio-1.00.a";
 			reg = <0xe000a000 0x1000>;
 			interrupts = <0 20 4>;
 			interrupt-parent = <&gic>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
 		};
 
 		qspi0: spi@e000d000 {

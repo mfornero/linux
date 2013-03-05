@@ -27,6 +27,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/pm_wakeup.h>
 #include <linux/slab.h>
+#include <linux/irqdomain.h>
 #include <asm/mach/irq.h>
 
 #define DRIVER_NAME "xgpiops"
@@ -89,6 +90,8 @@ struct xgpiops {
 	struct clk *clk;
 	ipipe_spinlock_t gpio_lock;
 };
+
+static struct irq_domain *irq_domain;
 
 /**
  * xgpiops_get_bank_pin - Get the bank number and pin number within that bank
@@ -233,9 +236,7 @@ static int xgpiops_dir_out(struct gpio_chip *chip, unsigned int pin, int state)
 
 static int xgpiops_to_irq(struct gpio_chip *chip, unsigned offset)
 {
-	if (offset < XGPIOPS_NR_GPIOS)
-		return XGPIOPS_IRQBASE + offset;
-	return -ENODEV;
+	return irq_find_mapping(irq_domain, offset);
 }
 
 /**
@@ -250,7 +251,7 @@ static void xgpiops_irq_ack(struct irq_data *irq_data)
 	struct xgpiops *gpio = (struct xgpiops *)irq_data_get_irq_chip_data(irq_data);
 	unsigned int device_pin_num, bank_num, bank_pin_num;
 
-	device_pin_num = irq_to_gpio(irq_data->irq); /* get pin num within the device */
+	device_pin_num = irq_data->hwirq; /* get pin num within the device */
 	xgpiops_get_bank_pin(device_pin_num, &bank_num, &bank_pin_num);
 	xgpiops_writereg(1 << bank_pin_num, gpio->base_addr +
 			(XGPIOPS_INTSTS_OFFSET(bank_num)));
@@ -269,7 +270,7 @@ static void xgpiops_irq_mask(struct irq_data *irq_data)
 	struct xgpiops *gpio = (struct xgpiops *)irq_data_get_irq_chip_data(irq_data);
 	unsigned int device_pin_num, bank_num, bank_pin_num;
 
-	device_pin_num = irq_to_gpio(irq_data->irq); /* get pin num within the device */
+	device_pin_num = irq_data->hwirq; /* get pin num within the device */
 	xgpiops_get_bank_pin(device_pin_num, &bank_num, &bank_pin_num);
 	xgpiops_writereg(1 << bank_pin_num,
 			  gpio->base_addr + XGPIOPS_INTDIS_OFFSET(bank_num));
@@ -288,7 +289,7 @@ static void xgpiops_irq_unmask(struct irq_data *irq_data)
 	struct xgpiops *gpio = irq_data_get_irq_chip_data(irq_data);
 	unsigned int device_pin_num, bank_num, bank_pin_num;
 
-	device_pin_num = irq_to_gpio(irq_data->irq); /* get pin num within the device */
+	device_pin_num = irq_data->hwirq; /* get pin num within the device */
 	xgpiops_get_bank_pin(device_pin_num, &bank_num, &bank_pin_num);
 	xgpiops_writereg(1 << bank_pin_num,
 			  gpio->base_addr + XGPIOPS_INTEN_OFFSET(bank_num));
@@ -314,7 +315,7 @@ static int xgpiops_set_irq_type(struct irq_data *irq_data, unsigned int type)
 	unsigned int device_pin_num, bank_num, bank_pin_num;
 	unsigned int int_type, int_pol, int_any;
 
-	device_pin_num = irq_to_gpio(irq_data->irq); /* get pin num within the device */
+	device_pin_num = irq_data->hwirq; /* get pin num within the device */
 	xgpiops_get_bank_pin(device_pin_num, &bank_num, &bank_pin_num);
 
 	int_type = xgpiops_readreg(gpio->base_addr +
@@ -548,7 +549,8 @@ static int __devinit xgpiops_probe(struct platform_device *pdev)
 	struct gpio_chip *chip;
 	resource_size_t remap_size;
 	struct resource *mem_res = NULL;
-	int pin_num, bank_num, gpio_irq;
+	int pin_num, bank_num;
+	int irq_base;
 
 	gpio = kzalloc(sizeof(struct xgpiops), GFP_KERNEL);
 	if (!gpio) {
@@ -632,21 +634,31 @@ static int __devinit xgpiops_probe(struct platform_device *pdev)
 		xgpiops_writereg(0xffffffff, gpio->base_addr +
 				  XGPIOPS_INTDIS_OFFSET(bank_num));
 	}
+	
+	irq_base = irq_alloc_descs(-1, 0, XGPIOPS_NR_GPIOS, 0);
+	if (irq_base < 0) {
+		dev_err(&pdev->dev, "Failed to allocate IRQ numbers\n");
+		goto err_clk_put;
+	}
+
+	irq_domain = irq_domain_add_legacy(pdev->dev.of_node, XGPIOPS_NR_GPIOS,
+					   irq_base, 0, &irq_domain_simple_ops,
+					   NULL);
 
 	/*
 	 * set the irq chip, handler and irq chip data for callbacks for
 	 * each pin
 	 */
-	gpio_irq = XGPIOPS_IRQBASE;
-	for (pin_num = 0; pin_num < XGPIOPS_NR_GPIOS; pin_num++, gpio_irq++) {
-		irq_set_chip(gpio_irq, &xgpiops_irqchip);
+	for (pin_num = 0; pin_num < XGPIOPS_NR_GPIOS; pin_num++) {
+		int gpio_irq = irq_find_mapping(irq_domain, pin_num);
+
+		irq_set_chip_and_handler(gpio_irq, &xgpiops_irqchip,
+					 handle_simple_irq);
 		irq_set_chip_data(gpio_irq, (void *)gpio);
-		irq_set_handler(gpio_irq, handle_simple_irq);
-		irq_set_status_flags(gpio_irq, IRQF_VALID);
-		irq_clear_status_flags(gpio_irq, IRQ_NOREQUEST);
+		set_irq_flags(gpio_irq, IRQF_VALID);
 	}
 
-	irq_set_handler_data(irq_num, (void *)(XGPIOPS_IRQBASE));
+	irq_set_handler_data(irq_num, (void *)irq_base);
 	irq_set_chained_handler(irq_num, xgpiops_irqhandler);
 
 	xgpiops_pm_runtime_init(pdev);
