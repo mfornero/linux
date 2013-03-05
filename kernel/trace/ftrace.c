@@ -4122,6 +4122,7 @@ __ftrace_ops_list_func(unsigned long ip, unsigned long parent_ip,
 		       struct ftrace_ops *ignored, struct pt_regs *regs)
 {
 	struct ftrace_ops *op;
+	unsigned long flags;
 
 	if (function_trace_stop)
 		return;
@@ -4134,14 +4135,14 @@ __ftrace_ops_list_func(unsigned long ip, unsigned long parent_ip,
 	 * Some of the ops may be dynamically allocated,
 	 * they must be freed after a synchronize_sched().
 	 */
-	preempt_disable_notrace();
+	flags = hard_local_irq_save_notrace();
 	op = rcu_dereference_raw(ftrace_ops_list);
 	while (op != &ftrace_list_end) {
 		if (ftrace_ops_test(op, ip))
 			op->func(ip, parent_ip, op, regs);
 		op = rcu_dereference_raw(op->next);
 	};
-	preempt_enable_notrace();
+	hard_local_irq_restore_notrace(flags);
 	trace_recursion_clear(TRACE_INTERNAL_BIT);
 }
 
