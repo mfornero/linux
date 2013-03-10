@@ -30,7 +30,7 @@
 
 #define PIDS_LONGS ((FCSE_NR_PIDS + BITS_PER_LONG - 1) / BITS_PER_LONG)
 
-static DEFINE_RAW_SPINLOCK(fcse_lock);
+static IPIPE_DEFINE_RAW_SPINLOCK(fcse_lock);
 static unsigned long fcse_pids_bits[PIDS_LONGS];
 unsigned long fcse_pids_cache_dirty[PIDS_LONGS];
 EXPORT_SYMBOL(fcse_pids_cache_dirty);
@@ -152,12 +152,17 @@ unsigned fcse_flush_all_start(void)
 	if (!cache_is_vivt())
 		return 0;
 
-#ifdef CONFIG_ARM_FCSE_PREEMPT_FLUSH
-	return nr_context_switches();
-#else
+#ifndef CONFIG_ARM_FCSE_PREEMPT_FLUSH
 	preempt_disable();
+#endif /* CONFIG_ARM_FCSE_PREEMPT_FLUSH */
+
+#if defined(CONFIG_IPIPE)
+	clear_ti_thread_flag(current_thread_info(), TIF_SWITCHED);
+#elif defined(CONFIG_ARM_FCSE_PREEMPT_FLUSH)
+	return nr_context_switches();
+#endif /* CONFIG_ARM_FCSE_PREEMPT_FLUSH */
+
 	return 0;
-#endif
 }
 
 noinline void
@@ -169,7 +174,9 @@ fcse_flush_all_done(unsigned seq, unsigned dirty)
 		return;
 
 	raw_spin_lock_irqsave(&fcse_lock, flags);
-#ifdef CONFIG_ARM_FCSE_PREEMPT_FLUSH
+#if defined(CONFIG_IPIPE)
+	if (!test_ti_thread_flag(current_thread_info(), TIF_SWITCHED))
+#elif defined(CONFIG_ARM_FCSE_PREEMPT_FLUSH)
 	if (seq == nr_context_switches())
 #endif /* CONFIG_ARM_FCSE_PREEMPT_FLUSH */
 		fcse_clear_dirty_all();
@@ -243,6 +250,7 @@ int fcse_switch_mm_inner(struct mm_struct *next)
 
   is_flush_needed:
 	flush_needed = reused_pid
+		|| !prev
 		|| prev->context.fcse.shared_dirty_pages;
 
 	fcse_pid_set(fcse_pid << FCSE_PID_SHIFT);
@@ -258,6 +266,7 @@ int fcse_switch_mm_inner(struct mm_struct *next)
 
 	return flush_needed;
 }
+EXPORT_SYMBOL_GPL(fcse_switch_mm_inner);
 
 void fcse_pid_reference(unsigned fcse_pid)
 {

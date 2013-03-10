@@ -34,7 +34,6 @@ static unsigned long mmap_base(unsigned long rnd)
 {
 #ifndef CONFIG_ARM_FCSE
 	unsigned long gap = rlimit(RLIMIT_STACK);
-	unsigned long base;
 
 	if (gap < MIN_GAP)
 		gap = MIN_GAP;

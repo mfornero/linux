@@ -41,7 +41,7 @@
 #define ASID_TO_IDX(asid)	((asid & ~ASID_MASK) - 1)
 #define IDX_TO_ASID(idx)	((idx + 1) & ~ASID_MASK)
 
-static DEFINE_RAW_SPINLOCK(cpu_asid_lock);
+static IPIPE_DEFINE_RAW_SPINLOCK(cpu_asid_lock);
 static atomic64_t asid_generation = ATOMIC64_INIT(ASID_FIRST_VERSION);
 static DECLARE_BITMAP(asid_map, NUM_USER_ASIDS);
 
@@ -181,10 +181,10 @@ static void new_context(struct mm_struct *mm, unsigned int cpu)
 	mm->context.id = asid;
 }
 
-void check_and_switch_context(struct mm_struct *mm, struct task_struct *tsk)
+int check_and_switch_context(struct mm_struct *mm, struct task_struct *tsk, bool root_p)
 {
 	unsigned long flags;
-	unsigned int cpu = smp_processor_id();
+	unsigned int cpu = ipipe_processor_id();
 
 	if (unlikely(mm->context.vmalloc_seq != init_mm.context.vmalloc_seq))
 		__check_vmalloc_seq(mm);
@@ -213,4 +213,6 @@ void check_and_switch_context(struct mm_struct *mm, struct task_struct *tsk)
 
 switch_mm_fastpath:
 	cpu_switch_mm(mm->pgd, mm, 1);
+
+	return 0;
 }

@@ -22,15 +22,22 @@
 #include <linux/io.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
+#include <linux/ipipe.h>
 
 #include <asm/cacheflush.h>
 #include <asm/hardware/cache-l2x0.h>
 #include "cache-aurora-l2.h"
 
+#ifndef CONFIG_IPIPE
+#define SPINLOCK_SECTION_LEN	4096UL
+#else /* CONFIG_IPIPE */
+#define SPINLOCK_SECTION_LEN	512UL
+#endif /* CONFIG_IPIPE */
+
 #define CACHE_LINE_SIZE		32
 
 static void __iomem *l2x0_base;
-static DEFINE_RAW_SPINLOCK(l2x0_lock);
+static IPIPE_DEFINE_RAW_SPINLOCK(l2x0_lock);
 static u32 l2x0_way_mask;	/* Bitmask of active ways */
 static u32 l2x0_size;
 static unsigned long sync_reg_offset = L2X0_CACHE_SYNC;
@@ -202,9 +209,12 @@ static void l2x0_inv_range(unsigned long start, unsigned long end)
 		l2x0_flush_line(end);
 		debug_writel(0x00);
 	}
+	raw_spin_unlock_irqrestore(&l2x0_lock, flags);
 
+	raw_spin_lock_irqsave(&l2x0_lock, flags);
 	while (start < end) {
-		unsigned long blk_end = start + min(end - start, 4096UL);
+		unsigned long blk_end =
+			start + min(end - start, SPINLOCK_SECTION_LEN);
 
 		while (start < blk_end) {
 			l2x0_inv_line(start);
@@ -234,7 +244,8 @@ static void l2x0_clean_range(unsigned long start, unsigned long end)
 	raw_spin_lock_irqsave(&l2x0_lock, flags);
 	start &= ~(CACHE_LINE_SIZE - 1);
 	while (start < end) {
-		unsigned long blk_end = start + min(end - start, 4096UL);
+		unsigned long blk_end =
+			start + min(end - start, SPINLOCK_SECTION_LEN);
 
 		while (start < blk_end) {
 			l2x0_clean_line(start);
@@ -264,7 +275,8 @@ static void l2x0_flush_range(unsigned long start, unsigned long end)
 	raw_spin_lock_irqsave(&l2x0_lock, flags);
 	start &= ~(CACHE_LINE_SIZE - 1);
 	while (start < end) {
-		unsigned long blk_end = start + min(end - start, 4096UL);
+		unsigned long blk_end =
+			start + min(end - start, SPINLOCK_SECTION_LEN);
 
 		debug_writel(0x03);
 		while (start < blk_end) {
