@@ -219,6 +219,11 @@ int ipipe_select_timers(const struct cpumask *mask)
 	unsigned cpu;
 	cpumask_t fixup;
 
+	if (!__ipipe_hrclock_ok()) {
+		printk("I-pipe: high-resolution clock not working\n");
+		return -ENODEV;
+	}
+
 	if (__ipipe_hrclock_freq > UINT_MAX) {
 		tmp = __ipipe_hrclock_freq;
 		do_div(tmp, 1000);

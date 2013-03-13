@@ -1367,7 +1367,12 @@ void __init __ipipe_init_tracer(void)
 	int i;
 #ifdef CONFIG_IPIPE_TRACE_VMALLOC
 	int cpu, path;
+#endif /* CONFIG_IPIPE_TRACE_VMALLOC */
 
+	if (!__ipipe_hrclock_ok())
+		return;
+
+#ifdef CONFIG_IPIPE_TRACE_VMALLOC
 	for_each_possible_cpu(cpu) {
 		struct ipipe_trace_path *tp_buf;
 

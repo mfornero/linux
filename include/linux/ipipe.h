@@ -109,6 +109,11 @@ extern struct clocksource *__ipipe_cs;
 
 #endif /* CONFIG_IPIPE_WANT_CLOCKSOURCE */
 
+static inline bool __ipipe_hrclock_ok(void)
+{
+	return __ipipe_hrclock_freq != 0;
+}
+
 static inline void __ipipe_nmi_enter(void)
 {
 	__this_cpu_write(ipipe_percpu.nmi_state, __ipipe_root_status);
