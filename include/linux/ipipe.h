@@ -406,6 +406,13 @@ extern bool __ipipe_probe_access;
 long ipipe_probe_kernel_read(void *dst, void *src, size_t size);
 long ipipe_probe_kernel_write(void *dst, void *src, size_t size);
 
+#if defined(CONFIG_DEBUG_ATOMIC_SLEEP) || defined(CONFIG_PROVE_LOCKING) || \
+	defined(CONFIG_PREEMPT_VOLUNTARY) || defined(CONFIG_IPIPE_DEBUG_CONTEXT)
+extern void __ipipe_uaccess_might_fault(void);
+#else
+#define __ipipe_uaccess_might_fault() might_fault()
+#endif
+
 #include <linux/ipipe_compat.h>
 
 #else	/* !CONFIG_IPIPE */
@@ -438,6 +445,7 @@ static inline void ipipe_unlock_irq(unsigned int irq) { }
 
 #define ipipe_probe_kernel_read(d, s, sz)	probe_kernel_read(d, s, sz)
 #define ipipe_probe_kernel_write(d, s, sz)	probe_kernel_write(d, s, sz)
+#define __ipipe_uaccess_might_fault()		might_fault()
 
 #endif	/* !CONFIG_IPIPE */
 

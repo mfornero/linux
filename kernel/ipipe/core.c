@@ -1770,3 +1770,32 @@ long ipipe_probe_kernel_write(void *dst, void *src, size_t size)
 	return ret ? -EFAULT : 0;
 }
 #endif /* CONFIG_KGDB */
+
+#if defined(CONFIG_DEBUG_ATOMIC_SLEEP) || defined(CONFIG_PROVE_LOCKING) || \
+	defined(CONFIG_PREEMPT_VOLUNTARY) || defined(CONFIG_IPIPE_DEBUG_CONTEXT)
+void __ipipe_uaccess_might_fault(void)
+{
+	struct ipipe_percpu_domain_data *pdd;
+	struct ipipe_domain *ipd;
+	unsigned long flags;
+
+	flags = hard_local_irq_save();
+	ipd = __ipipe_current_domain;
+	if (ipd == ipipe_root_domain) {
+		hard_local_irq_restore(flags);
+		might_fault();
+		return;
+	}
+
+#ifdef CONFIG_IPIPE_DEBUG_CONTEXT
+	pdd = ipipe_this_cpu_context(ipd);
+	WARN_ON_ONCE(hard_irqs_disabled_flags(flags) 
+		     || test_bit(IPIPE_STALL_FLAG, &pdd->status));
+#else /* !CONFIG_IPIPE_DEBUG_CONTEXT */
+	(void)pdd;
+#endif /* !CONFIG_IPIPE_DEBUG_CONTEXT */
+	hard_local_irq_restore(flags);
+	
+}
+EXPORT_SYMBOL_GPL(__ipipe_uaccess_might_fault);
+#endif
