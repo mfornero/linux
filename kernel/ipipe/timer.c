@@ -471,15 +471,17 @@ unsigned ipipe_timer_ns2ticks(struct ipipe_timer *timer, unsigned ns)
 void ipipe_update_hostrt(struct timekeeper *tk)
 {
 	struct ipipe_hostrt_data data;
+	struct timespec xt;
 
+	xt = tk_xtime(tk);
 	ipipe_root_only();
 	data.live = 1;
 	data.cycle_last = tk->clock->cycle_last;
 	data.mask = tk->clock->mask;
 	data.mult = tk->mult;
 	data.shift = tk->shift;
-	data.wall_time_sec = tk->xtime_sec;
-	data.wall_time_nsec = tk->xtime_nsec;
+	data.wall_time_sec = xt.tv_sec;
+	data.wall_time_nsec = xt.tv_nsec;
 	data.wall_to_monotonic = tk->wall_to_monotonic;
 	__ipipe_notify_kevent(IPIPE_KEVT_HOSTRT, &data);
 }
