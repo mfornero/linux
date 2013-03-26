@@ -238,9 +238,18 @@ static void update_global_ops(void)
 
 static void update_ftrace_function(void)
 {
+	struct ftrace_ops *ops;
 	ftrace_func_t func;
 
 	update_global_ops();
+
+	for (ops = ftrace_ops_list;
+	     ops != &ftrace_list_end; ops = ops->next)
+		if (ops->flags & FTRACE_OPS_FL_IPIPE_EXCLUSIVE) {
+			function_trace_op = ops;
+			ftrace_trace_function = ops->func;
+			return;
+		}
 
 	/*
 	 * If we are at the end of the list and this ops is

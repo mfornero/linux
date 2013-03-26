@@ -1305,7 +1305,7 @@ ipipe_trace_function(unsigned long ip, unsigned long parent_ip,
 
 static struct ftrace_ops ipipe_trace_ops = {
 	.func = ipipe_trace_function,
-	.flags = FTRACE_OPS_FL_RECURSION_SAFE,
+	.flags = FTRACE_OPS_FL_IPIPE_EXCLUSIVE,
 };
 
 static int __ipipe_wr_enable(struct file *file, const char __user *buffer,
