@@ -1102,6 +1102,8 @@ static void complete_domain_migration(void) /* hw IRQs off */
 	__set_bit(IPIPE_STALL_FLAG, &p->status);
 	ipipe_migration_hook(t);
 	__clear_bit(IPIPE_STALL_FLAG, &p->status);
+	if (__ipipe_ipending_p(p))
+		__ipipe_sync_pipeline(p->domain);
 }
 
 #endif /* !CONFIG_IPIPE_LEGACY */
