@@ -870,7 +870,7 @@ int ipipe_request_irq(struct ipipe_domain *ipd,
 	ipd->irqs[irq].ackfn = ackfn;
 	ipd->irqs[irq].control = IPIPE_HANDLE_MASK;
 
-	if (irq < NR_IRQS)
+	if (irq < IPIPE_NR_ROOT_IRQS)
 		__ipipe_enable_irqdesc(ipd, irq);
 out:
 	spin_unlock_irqrestore(&__ipipe_lock, flags);
@@ -898,7 +898,7 @@ void ipipe_free_irq(struct ipipe_domain *ipd,
 	ipd->irqs[irq].ackfn = NULL;
 	ipd->irqs[irq].control = 0;
 
-	if (irq < NR_IRQS)
+	if (irq < IPIPE_NR_ROOT_IRQS)
 		__ipipe_disable_irqdesc(ipd, irq);
 out:
 	spin_unlock_irqrestore(&__ipipe_lock, flags);
@@ -1234,7 +1234,7 @@ void __ipipe_dispatch_irq(unsigned int irq, int flags) /* hw interrupts off */
 
 #ifdef CONFIG_IPIPE_DEBUG
 	if (unlikely(irq >= IPIPE_NR_IRQS) ||
-	    (irq < NR_IRQS && irq_to_desc(irq) == NULL)) {
+	    (irq < IPIPE_NR_ROOT_IRQS && irq_to_desc(irq) == NULL)) {
 		pr_err("I-pipe: spurious interrupt %u\n", irq);
 		return;
 	}
@@ -1243,7 +1243,7 @@ void __ipipe_dispatch_irq(unsigned int irq, int flags) /* hw interrupts off */
 	 * CAUTION: on some archs, virtual IRQs may have acknowledge
 	 * handlers. Multiplex IRQs should have one too.
 	 */
-	if (unlikely(irq >= NR_IRQS)) {
+	if (unlikely(irq >= IPIPE_NR_ROOT_IRQS)) {
 		desc = NULL;
 		chained_irq = 0;
 	} else {

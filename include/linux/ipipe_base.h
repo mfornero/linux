@@ -47,6 +47,10 @@ void ipipe_restore_root(unsigned long x);
 #include <asm/ipipe_base.h>
 #include <linux/compiler.h>
 
+#ifndef IPIPE_NR_ROOT_IRQS
+#define IPIPE_NR_ROOT_IRQS	NR_IRQS
+#endif /* !IPIPE_NR_ROOT_IRQS */
+
 #define __bpl_up(x)		(((x)+(BITS_PER_LONG-1)) & ~(BITS_PER_LONG-1))
 /* Number of virtual IRQs (must be a multiple of BITS_PER_LONG) */
 #define IPIPE_NR_VIRQS		BITS_PER_LONG
