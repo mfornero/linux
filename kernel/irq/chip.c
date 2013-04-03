@@ -421,6 +421,15 @@ static inline void preflow_handler(struct irq_desc *desc)
 static inline void preflow_handler(struct irq_desc *desc) { }
 #endif
 
+#ifdef CONFIG_IPIPE
+static void cond_release_fasteoi_irq(struct irq_desc *desc)
+{
+	if (desc->irq_data.chip->irq_release && 
+	    !irqd_irq_disabled(&desc->irq_data) && !desc->threads_oneshot)
+		desc->irq_data.chip->irq_release(&desc->irq_data);;
+}
+#endif /* CONFIG_IPIPE */
+
 /**
  *	handle_fasteoi_irq - irq handler for transparent controllers
  *	@irq:	the interrupt number
@@ -464,8 +473,7 @@ handle_fasteoi_irq(unsigned int irq, struct irq_desc *desc)
 #ifdef CONFIG_IPIPE
 	/* IRQCHIP_EOI_IF_HANDLED is ignored as I-pipe ends it early on
 	 * acceptance. */
-	if (desc->irq_data.chip->irq_release)
-		desc->irq_data.chip->irq_release(&desc->irq_data);
+	cond_release_fasteoi_irq(desc);
 out_eoi:
 #else  /* !CONFIG_IPIPE */
 	if (desc->istate & IRQS_ONESHOT)
