@@ -1379,7 +1379,7 @@ void __init __ipipe_init_tracer(void)
 		tp_buf = vmalloc_node(sizeof(struct ipipe_trace_path) *
 				      IPIPE_TRACE_PATHS, cpu_to_node(cpu));
 		if (!tp_buf) {
-			printk(KERN_ERR "I-pipe: "
+			pr_err("I-pipe: "
 			       "insufficient memory for trace buffer.\n");
 			return;
 		}
