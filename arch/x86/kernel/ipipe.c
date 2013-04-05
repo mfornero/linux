@@ -222,8 +222,6 @@ void __init __ipipe_enable_pipeline(void)
 			  ipipe_apic_vector_irq(REBOOT_VECTOR),
 			  __ipipe_do_IRQ, smp_reboot_interrupt,
 			  __ipipe_ack_apic);
-#else
-	(void)vector;
 #endif	/* CONFIG_SMP */
 
 	/*

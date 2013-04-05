@@ -2696,7 +2696,9 @@ static struct irq_chip ioapic_chip __read_mostly = {
 	.irq_set_affinity	= ioapic_set_affinity,
 	.irq_retrigger		= ioapic_retrigger_irq,
 #ifdef CONFIG_IPIPE
+#ifdef CONFIG_SMP
 	.irq_move		= move_xxapic_irq,
+#endif
 	.irq_hold		= hold_ioapic_irq,
 	.irq_release		= release_ioapic_irq,
 #endif
@@ -3263,7 +3265,7 @@ static struct irq_chip msi_chip = {
 	.irq_ack		= ack_apic_edge,
 	.irq_set_affinity	= msi_set_affinity,
 	.irq_retrigger		= ioapic_retrigger_irq,
-#ifdef CONFIG_IPIPE
+#if defined(CONFIG_IPIPE) && defined(CONFIG_SMP)
 	.irq_move		= move_xxapic_irq,
 #endif
 };
@@ -3380,7 +3382,7 @@ static struct irq_chip dmar_msi_type = {
 	.irq_ack		= ack_apic_edge,
 	.irq_set_affinity	= dmar_msi_set_affinity,
 	.irq_retrigger		= ioapic_retrigger_irq,
-#ifdef CONFIG_IPIPE
+#if defined(CONFIG_IPIPE) && defined(CONFIG_SMP)
 	.irq_move		= move_xxapic_irq,
 #endif
 };
@@ -3431,7 +3433,7 @@ static struct irq_chip hpet_msi_type = {
 	.irq_ack = ack_apic_edge,
 	.irq_set_affinity = hpet_msi_set_affinity,
 	.irq_retrigger = ioapic_retrigger_irq,
-#ifdef CONFIG_IPIPE
+#if defined(CONFIG_IPIPE) && defined(CONFIG_SMP)
 	.irq_move		= move_xxapic_irq,
 #endif
 };
@@ -3502,7 +3504,7 @@ static struct irq_chip ht_irq_chip = {
 	.irq_ack		= ack_apic_edge,
 	.irq_set_affinity	= ht_set_affinity,
 	.irq_retrigger		= ioapic_retrigger_irq,
-#ifdef CONFIG_IPIPE
+#if defined(CONFIG_IPIPE) && defined(CONFIG_SMP)
 	.irq_move		= move_xxapic_irq,
 #endif
 };
