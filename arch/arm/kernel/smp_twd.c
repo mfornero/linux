@@ -26,6 +26,7 @@
 #include <asm/smp_twd.h>
 #include <asm/localtimer.h>
 #include <asm/hardware/gic.h>
+#include <asm/cputype.h>
 #include <asm/ipipe.h>
 
 /* set up by the platform code */
@@ -57,6 +58,9 @@ static void __cpuinit twd_calibrate_rate(void);
 
 static void __cpuinit gt_setup(unsigned long base_paddr, unsigned bits)
 {
+	if ((read_cpuid_id() & 0xf00000) == 0)
+		return;
+
 	twd_clk = twd_get_clock();
 
 	if (!IS_ERR_OR_NULL(twd_clk))
