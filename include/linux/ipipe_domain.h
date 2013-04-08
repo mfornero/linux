@@ -25,7 +25,7 @@
 #ifdef CONFIG_IPIPE
 
 #include <linux/mutex.h>
-#include <asm/percpu.h>
+#include <linux/percpu.h>
 #include <asm/ptrace.h>
 
 struct task_struct;
