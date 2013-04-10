@@ -334,8 +334,7 @@ void __init __ipipe_init(void)
 	/* Now we may engage the pipeline. */
 	__ipipe_enable_pipeline();
 
-	printk(KERN_INFO "Interrupt pipeline (release #%d)\n",
-	       IPIPE_CORE_RELEASE);
+	pr_info("Interrupt pipeline (release #%d)\n", IPIPE_CORE_RELEASE);
 }
 
 static inline void init_head_stage(struct ipipe_domain *ipd)
@@ -365,7 +364,7 @@ void ipipe_register_head(struct ipipe_domain *ipd, const char *name)
 	ipipe_head_domain = ipd;
 	add_domain_proc(ipd);
 
-	printk(KERN_INFO "I-pipe: head domain %s registered.\n", name);
+	pr_info("I-pipe: head domain %s registered.\n", name);
 }
 EXPORT_SYMBOL_GPL(ipipe_register_head);
 
@@ -379,7 +378,7 @@ void ipipe_unregister_head(struct ipipe_domain *ipd)
 	remove_domain_proc(ipd);
 	mutex_unlock(&ipd->mutex);
 
-	printk(KERN_INFO "I-pipe: head domain %s unregistered.\n", ipd->name);
+	pr_info("I-pipe: head domain %s unregistered.\n", ipd->name);
 }
 EXPORT_SYMBOL_GPL(ipipe_unregister_head);
 
@@ -458,8 +457,8 @@ void __ipipe_restore_head(unsigned long x) /* hw interrupt off */
 			 */
 			hard_local_irq_enable();
 			warned = 1;
-			printk(KERN_WARNING
-				   "I-pipe: ipipe_restore_head() optimization failed.\n");
+			pr_warning("I-pipe: ipipe_restore_head() "
+				   "optimization failed.\n");
 			dump_stack();
 			hard_local_irq_disable();
 		}
@@ -1102,6 +1101,8 @@ static void complete_domain_migration(void) /* hw IRQs off */
 	__set_bit(IPIPE_STALL_FLAG, &p->status);
 	ipipe_migration_hook(t);
 	__clear_bit(IPIPE_STALL_FLAG, &p->status);
+	if (__ipipe_ipending_p(p))
+		__ipipe_sync_pipeline(p->domain);
 }
 
 #endif /* !CONFIG_IPIPE_LEGACY */
@@ -1232,7 +1233,7 @@ void __ipipe_dispatch_irq(unsigned int irq, int flags) /* hw interrupts off */
 #ifdef CONFIG_IPIPE_DEBUG
 	if (unlikely(irq >= IPIPE_NR_IRQS) ||
 	    (irq < NR_IRQS && irq_to_desc(irq) == NULL)) {
-		printk(KERN_ERR "I-pipe: spurious interrupt %u\n", irq);
+		pr_err("I-pipe: spurious interrupt %u\n", irq);
 		return;
 	}
 #endif
@@ -1581,15 +1582,14 @@ void ipipe_root_only(void)
 	ipipe_trace_panic_freeze();
 
 	if (this_domain != ipipe_root_domain)
-		printk(KERN_ERR
-		       "I-pipe: Detected illicit call from head domain '%s'\n"
-		       KERN_ERR "        into a regular Linux service\n",
+		pr_err("I-pipe: Detected illicit call from head domain '%s'\n"
+		       "        into a regular Linux service\n",
 		       this_domain->name);
 	else
-		printk(KERN_ERR "I-pipe: Detected stalled head domain, "
-				"probably caused by a bug.\n"
-				"        A critical section may have been "
-				"left unterminated.\n");
+		pr_err("I-pipe: Detected stalled head domain, "
+			"probably caused by a bug.\n"
+			"        A critical section may have been "
+			"left unterminated.\n");
 	dump_stack();
 	ipipe_trace_panic_dump();
 }

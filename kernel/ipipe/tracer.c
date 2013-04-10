@@ -1305,7 +1305,7 @@ ipipe_trace_function(unsigned long ip, unsigned long parent_ip,
 
 static struct ftrace_ops ipipe_trace_ops = {
 	.func = ipipe_trace_function,
-	.flags = FTRACE_OPS_FL_RECURSION_SAFE,
+	.flags = FTRACE_OPS_FL_IPIPE_EXCLUSIVE,
 };
 
 static int __ipipe_wr_enable(struct file *file, const char __user *buffer,
@@ -1367,14 +1367,19 @@ void __init __ipipe_init_tracer(void)
 	int i;
 #ifdef CONFIG_IPIPE_TRACE_VMALLOC
 	int cpu, path;
+#endif /* CONFIG_IPIPE_TRACE_VMALLOC */
 
+	if (!__ipipe_hrclock_ok())
+		return;
+
+#ifdef CONFIG_IPIPE_TRACE_VMALLOC
 	for_each_possible_cpu(cpu) {
 		struct ipipe_trace_path *tp_buf;
 
 		tp_buf = vmalloc_node(sizeof(struct ipipe_trace_path) *
 				      IPIPE_TRACE_PATHS, cpu_to_node(cpu));
 		if (!tp_buf) {
-			printk(KERN_ERR "I-pipe: "
+			pr_err("I-pipe: "
 			       "insufficient memory for trace buffer.\n");
 			return;
 		}
