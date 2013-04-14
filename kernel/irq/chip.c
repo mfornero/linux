@@ -462,7 +462,8 @@ handle_fasteoi_irq(unsigned int irq, struct irq_desc *desc)
 	handle_irq_event(desc);
 
 #ifdef CONFIG_IPIPE
-	/* XXX: IRQCHIP_EOI_IF_HANDLED is ignored. */
+	/* IRQCHIP_EOI_IF_HANDLED is ignored as I-pipe ends it early on
+	 * acceptance. */
 	if (desc->irq_data.chip->irq_release)
 		desc->irq_data.chip->irq_release(&desc->irq_data);
 out_eoi:
