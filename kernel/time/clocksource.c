@@ -250,6 +250,9 @@ static void clocksource_watchdog(unsigned long data)
 	cycle_t csnow, wdnow;
 	int64_t wd_nsec, cs_nsec;
 	int next_cpu, reset_pending;
+#ifdef CONFIG_IPIPE
+	cycle_t wdref;
+#endif
 
 	spin_lock(&watchdog_lock);
 	if (!watchdog_running)
@@ -266,10 +269,21 @@ static void clocksource_watchdog(unsigned long data)
 			continue;
 		}
 
+#ifdef CONFIG_IPIPE
+retry:
+#endif
 		local_irq_disable();
+		wdref = watchdog->read(watchdog);
 		csnow = cs->read(cs);
 		wdnow = watchdog->read(watchdog);
 		local_irq_enable();
+
+#ifdef CONFIG_IPIPE
+		wd_nsec = clocksource_cyc2ns((wdnow - wdref) & watchdog->mask,
+					     watchdog->mult, watchdog->shift);
+		if (wd_nsec > WATCHDOG_THRESHOLD)
+			goto retry;
+#endif
 
 		/* Clocksource initialized ? */
 		if (!(cs->flags & CLOCK_SOURCE_WATCHDOG) ||
