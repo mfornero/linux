@@ -138,10 +138,10 @@ static int __ipipe_common_info_show(struct seq_file *p, void *data)
 	unsigned long ctlbits;
 	unsigned int irq;
 
-	seq_printf(p, "       +--- Handled\n");
-	seq_printf(p, "       |+-- Locked\n");
-	seq_printf(p, "       ||+- Virtual\n");
-	seq_printf(p, "[IRQ]  |||\n");
+	seq_printf(p, "        +--- Handled\n");
+	seq_printf(p, "        |+-- Locked\n");
+	seq_printf(p, "        ||+- Virtual\n");
+	seq_printf(p, " [IRQ]  |||  Handler\n");
 
 	mutex_lock(&ipd->mutex);
 
@@ -174,8 +174,13 @@ static int __ipipe_common_info_show(struct seq_file *p, void *data)
 		else
 			virtuality = '.';
 
-		seq_printf(p, " %3u:  %c%c%c\n",
-			     irq, handling, lockbit, virtuality);
+		if (ctlbits & IPIPE_HANDLE_MASK)
+			seq_printf(p, " %4u:  %c%c%c  %pf\n",
+				   irq, handling, lockbit, virtuality,
+				   ipd->irqs[irq].handler);
+		else
+			seq_printf(p, " %4u:  %c%c%c\n",
+				   irq, handling, lockbit, virtuality);
 	}
 
 	mutex_unlock(&ipd->mutex);
