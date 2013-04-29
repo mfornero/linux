@@ -40,6 +40,7 @@ struct ipipe_tsc_value_t *ipipe_tsc_value;
 
 void __ipipe_tsc_register(struct __ipipe_tscinfo *info)
 {
+	struct ipipe_tsc_value_t *vector_tsc_value;
 	unsigned long *tsc_addr;
 	__ipipe_tsc_t *implem;
 	unsigned long flags;
@@ -59,6 +60,7 @@ void __ipipe_tsc_register(struct __ipipe_tscinfo *info)
 #endif
 	registered = ipipe_tsc_value != NULL;
 	ipipe_tsc_value = (struct ipipe_tsc_value_t *)tsc_area;
+	vector_tsc_value = (struct ipipe_tsc_value_t *)__ipipe_tsc_area;
 
 	switch(info->type) {
 	case IPIPE_TSC_TYPE_FREERUNNING:
@@ -105,10 +107,10 @@ void __ipipe_tsc_register(struct __ipipe_tscinfo *info)
 	tsc_info = *info;
 	*tsc_addr = tsc_info.counter_vaddr;
 	if (tsc_info.type == IPIPE_TSC_TYPE_DECREMENTER) {
-		tsc_info.u.dec.last_cnt = &ipipe_tsc_value->last_cnt;
-		tsc_info.u.dec.tsc = &ipipe_tsc_value->last_tsc;
+		tsc_info.u.dec.last_cnt = &vector_tsc_value->last_cnt;
+		tsc_info.u.dec.tsc = &vector_tsc_value->last_tsc;
 	} else
-		tsc_info.u.fr.tsc = &ipipe_tsc_value->last_tsc;
+		tsc_info.u.fr.tsc = &vector_tsc_value->last_tsc;
 
 	flags = hard_local_irq_save();
 	ipipe_tsc_value->last_tsc = 0;
