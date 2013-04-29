@@ -144,7 +144,7 @@ static const char * const task_state_array[] = {
 	"K (wakekill)",		/* 128 */
 	"W (waking)",		/* 256 */
 #ifdef CONFIG_IPIPE
-	"A (atomic switch)",	/* 512 */
+	"H (hardening)",	/* 512 */
 	"N (wakeup disabled)",	/* 1024 */
 #endif
 };
