@@ -344,7 +344,7 @@ static int __init omap_dm_timer_init_one(struct omap_dm_timer *timer,
 }
 
 #ifdef CONFIG_IPIPE
-static struct ipipe_timer omap4_itimer = {
+static struct ipipe_timer omap_shared_itimer = {
 	.ack			= omap2_gp_timer_ack,
 	.min_delay_ticks	= 3,
 };
@@ -430,7 +430,7 @@ static void __init omap2_gp_clockevent_init(int gptimer_id,
 
 		ipipe_timer_register(&omap3_itimer);
 	}
-	if (cpu_is_omap44xx() && num_possible_cpus() == 1)
+	if ((cpu_is_omap44xx() && num_possible_cpus() == 1) || soc_is_am33xx())
 		ipipe = 1;
 #endif /* CONFIG_IPIPE */
 
@@ -455,11 +455,11 @@ static void __init omap2_gp_clockevent_init(int gptimer_id,
 	clockevent_gpt.irq = omap_dm_timer_get_irq(&clkev);
 
 #ifdef CONFIG_IPIPE
-	if (cpu_is_omap44xx() && num_possible_cpus() == 1) {
-		omap4_itimer.irq = clkev.irq;
-		omap4_itimer.min_delay_ticks = 3;
+	if (ipipe) {
+		omap_shared_itimer.irq = clkev.irq;
+		omap_shared_itimer.min_delay_ticks = 3;
 
-		clockevent_gpt.ipipe_timer = &omap4_itimer;
+		clockevent_gpt.ipipe_timer = &omap_shared_itimer;
 	}
 #endif
 
@@ -569,22 +569,14 @@ static int __init __maybe_unused omap2_sync32k_clocksource_init(void)
 static void __init omap2_gptimer_clocksource_init(int gptimer_id,
 						const char *fck_source)
 {
-	int res, ipipe = 0;
+	int res, ipipe = IS_ENABLED(CONFIG_IPIPE);
 
-#ifdef CONFIG_IPIPE
-	ipipe = 1;
-#endif
 	clksrc.errata = omap_dm_timer_get_errata();
 	__omap_dm_timer_override_errata(&clksrc, OMAP_TIMER_ERRATA_I103_I767);
 
 	res = omap_dm_timer_init_one(&clksrc, gptimer_id, fck_source, NULL,
 				     (ipipe ? OMAP_TIMER_POSTED 
 				      : OMAP_TIMER_NONPOSTED), ipipe);
-	if (res != 0) {
-		printk("Error %d requesting timer %d\n", 
-		       res, gptimer_id);
-		BUG();
-	}
 	BUG_ON(res);
 
 	__omap_dm_timer_load_start(&clksrc,
@@ -592,13 +584,17 @@ static void __init omap2_gptimer_clocksource_init(int gptimer_id,
 				   OMAP_TIMER_NONPOSTED);
 	setup_sched_clock(dmtimer_read_sched_clock, 32, clksrc.rate);
 
-#if defined(CONFIG_IPIPE)
-	if (ipipe) {
+#ifdef CONFIG_IPIPE
+	{
+		unsigned long off;
+
+		off = OMAP_TIMER_COUNTER_REG & 0xff;
+		if (clksrc.revision == 2)
+			off += OMAP_TIMER_V2_FUNC_OFFSET;
+
 		tsc_info.freq = clksrc.rate;
-		tsc_info.counter_vaddr =
-			(unsigned long)clksrc.io_base + (OMAP_TIMER_COUNTER_REG & 0xff);
-		tsc_info.u.counter_paddr =
-			clksrc.phys_base + (OMAP_TIMER_COUNTER_REG & 0xff);
+		tsc_info.counter_vaddr = (unsigned long)clksrc.io_base + off;
+		tsc_info.u.counter_paddr = clksrc.phys_base + off;
 		__ipipe_tsc_register(&tsc_info);
 	}
 #endif
