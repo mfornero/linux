@@ -426,7 +426,7 @@ static void cond_release_fasteoi_irq(struct irq_desc *desc)
 {
 	if (desc->irq_data.chip->irq_release && 
 	    !irqd_irq_disabled(&desc->irq_data) && !desc->threads_oneshot)
-		desc->irq_data.chip->irq_release(&desc->irq_data);;
+		desc->irq_data.chip->irq_release(&desc->irq_data);
 }
 #endif /* CONFIG_IPIPE */
 
@@ -620,10 +620,14 @@ handle_percpu_irq(unsigned int irq, struct irq_desc *desc)
 	kstat_incr_irqs_this_cpu(irq, desc);
 
 #ifdef CONFIG_IPIPE
+	(void)chip;
+
 	handle_irq_event_percpu(desc, desc->action);
 
-	if (chip->irq_eoi && !irqd_irq_masked(&desc->irq_data))
-		chip->irq_unmask(&desc->irq_data);
+	if (cpumask_test_cpu(smp_processor_id(), desc->percpu_enabled) &&
+	    !irqd_irq_masked(&desc->irq_data) &&
+	    !desc->threads_oneshot)
+		desc->ipipe_end(desc->irq_data.irq, desc);
 #else
 	if (chip->irq_ack)
 		chip->irq_ack(&desc->irq_data);
@@ -671,8 +675,11 @@ void handle_percpu_devid_irq(unsigned int irq, struct irq_desc *desc)
 	if (chip->irq_eoi)
 		chip->irq_eoi(&desc->irq_data);
 #else
-	if (chip->irq_eoi && !irqd_irq_masked(&desc->irq_data))
-		chip->irq_unmask(&desc->irq_data);
+	;
+	if (cpumask_test_cpu(smp_processor_id(), desc->percpu_enabled) && 
+	    !irqd_irq_masked(&desc->irq_data) &&
+	    !desc->threads_oneshot)
+		desc->ipipe_end(desc->irq_data.irq, desc);
 #endif
 }
 
@@ -756,8 +763,14 @@ __fixup_irq_handler(struct irq_desc *desc, irq_flow_handler_t handle, int is_cha
 			desc->ipipe_end = __ipipe_end_fasteoi_irq;
 		} else if (handle == handle_percpu_irq ||
 			   handle == handle_percpu_devid_irq) {
-			desc->ipipe_ack = __ipipe_ack_percpu_irq;
-			desc->ipipe_end = __ipipe_nop_irq;
+			if (irq_desc_get_chip(desc) &&
+			    irq_desc_get_chip(desc)->irq_hold) {
+				desc->ipipe_ack = __ipipe_ack_fasteoi_irq;
+				desc->ipipe_end = __ipipe_end_fasteoi_irq;
+			} else {
+				desc->ipipe_ack = __ipipe_ack_percpu_irq;
+				desc->ipipe_end = __ipipe_nop_irq;
+			}
 		} else if (irq_desc_get_chip(desc) == &no_irq_chip) {
 			desc->ipipe_ack = __ipipe_nop_irq;
 			desc->ipipe_end = __ipipe_nop_irq;
