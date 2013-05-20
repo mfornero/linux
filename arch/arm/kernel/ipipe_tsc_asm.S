@@ -244,3 +244,10 @@ __ipipe_decrementer_16:
 	adc	r0, r2, #0
 #endif /* Big endian */
 	usr_ret	lr
+
+	.align 5
+	.globl __ipipe_freerunning_arch
+__ipipe_freerunning_arch:
+	nop
+	mrrc	p15, 0, r0, r1, c14
+	usr_ret	lr

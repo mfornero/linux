@@ -50,6 +50,7 @@ struct ipipe_domain;
 #define IPIPE_TSC_TYPE_DECREMENTER 		2
 #define IPIPE_TSC_TYPE_FREERUNNING_COUNTDOWN	3
 #define IPIPE_TSC_TYPE_FREERUNNING_TWICE	4
+#define IPIPE_TSC_TYPE_FREERUNNING_ARCH		5
 
 /* tscinfo, exported to user-space */
 struct __ipipe_tscinfo {
