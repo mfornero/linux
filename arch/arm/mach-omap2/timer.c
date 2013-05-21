@@ -714,18 +714,21 @@ static void __init omap##name##_sync32k_timer_init(void)		\
 {									\
 	const char *clk = clkev_src;					\
 									\
-	if (cpu_is_omap44xx() && num_possible_cpus() == 1)		\
-		clk = OMAP4_MPU_SOURCE;				\
+	if (num_possible_cpus() == 1 && !soc_is_omap54xx()) {		\
+		use_gptimer_clksrc = 1;					\
+		if (cpu_is_omap44xx())					\
+			clk = OMAP4_MPU_SOURCE;				\
+	}								\
 	omap_dmtimer_init();						\
 	omap2_gp_clockevent_init((clkev_nr), clk, clkev_prop);		\
 	/* Enable the use of clocksource="gp_timer" kernel parameter */	\
-	if (use_gptimer_clksrc || num_possible_cpus() == 1)		\
+	if (use_gptimer_clksrc)						\
 		omap2_gptimer_clocksource_init((clksrc_nr), clksrc_src); \
 	else								\
 		omap2_sync32k_clocksource_init();			\
 	if (cpu_is_omap34xx())						\
 		omap3_pic_muter_register();				\
-	else if (cpu_is_omap44xx())					\
+	else if (cpu_is_omap44xx() || soc_is_omap54xx())		\
 		omap4_pic_muter_register();				\
 }
 #endif
