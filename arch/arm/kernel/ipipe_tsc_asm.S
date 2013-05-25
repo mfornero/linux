@@ -249,5 +249,10 @@ __ipipe_decrementer_16:
 	.globl __ipipe_freerunning_arch
 __ipipe_freerunning_arch:
 	nop
+#ifdef CONFIG_ARM_ARCH_TIMER
 	mrrc	p15, 0, r0, r1, c14
+#else
+	mov	r0, #0
+	mov	r1, #0
+#endif
 	usr_ret	lr
