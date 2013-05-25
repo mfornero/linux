@@ -39,7 +39,7 @@
 #include <linux/cache.h>
 #include <linux/threads.h>
 
-#define IPIPE_CORE_RELEASE	3
+#define IPIPE_CORE_RELEASE	1
 
 struct ipipe_domain;
 
