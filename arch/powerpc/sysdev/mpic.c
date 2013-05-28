@@ -1211,7 +1211,7 @@ static void mpic_cascade(unsigned int irq, struct irq_desc *desc)
 
 	virq = mpic_get_one_irq(mpic);
 	if (virq)
-		generic_handle_irq(virq);
+		ipipe_handle_demuxed_irq(virq);
 
 	chip->irq_eoi(&desc->irq_data);
 }
