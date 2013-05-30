@@ -8223,7 +8223,7 @@ void __ipipe_reenter_root(void)
 	p = __this_cpu_read(ipipe_percpu.rqlock_owner);
 	finish_task_switch(rq, p);
 	post_schedule(rq);
-	preempt_enable_no_resched();
+	sched_preempt_enable_no_resched();
 }
 EXPORT_SYMBOL_GPL(__ipipe_reenter_root);
 
