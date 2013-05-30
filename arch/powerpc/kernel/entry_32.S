@@ -492,6 +492,21 @@ ret_from_fork:
 
 	.globl	ret_from_kernel_thread
 ret_from_kernel_thread:
+#ifdef CONFIG_IPIPE
+#ifdef CONFIG_IPIPE_TRACE_IRQSOFF
+	stwu	r1,-4(r1)
+	stw	r3,0(r1)
+	lis	r3,(0x80000000)@h
+	ori	r3,r3,(0x80000000)@l
+	bl	ipipe_trace_end
+	lwz	r3,0(r1)
+	addi	r1,r1,4
+#endif /* CONFIG_IPIPE_TRACE_IRQSOFF */
+	LOAD_MSR_KERNEL(r10,MSR_KERNEL)
+	ori	r10,r10,MSR_EE
+	SYNC
+	MTMSRD(r10)
+#endif /* CONFIG_IPIPE */
 	REST_NVGPRS(r1)
 	bl	schedule_tail
 	li	r3,0
