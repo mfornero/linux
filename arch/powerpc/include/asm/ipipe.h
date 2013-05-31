@@ -50,20 +50,6 @@ struct ipipe_arch_sysinfo {
 extern cpumask_t __ipipe_dbrk_pending;
 #endif
 
-#define ipipe_mm_switch_protect(flags)					\
-	do {								\
-		__mmactivate_head();					\
-		barrier();						\
-		(void)(flags);						\
-	} while(0)
-
-#define ipipe_mm_switch_unprotect(flags)				\
-	do {								\
-		barrier();						\
-		__mmactivate_tail();					\
-		(void)(flags);						\
-	} while(0)
-
 extern unsigned long __ipipe_hrtimer_freq;
 
 #define __ipipe_hrclock_freq	ppc_tb_freq
@@ -172,13 +158,6 @@ static inline void ipipe_mute_pic(void) { }
 static inline void ipipe_unmute_pic(void) { }
 
 static inline void ipipe_notify_root_preemption(void) { }
-
-#else /* !CONFIG_IPIPE */
-
-#include <linux/interrupt.h>
-
-#define ipipe_mm_switch_protect(flags)		do { (void)(flags); } while(0)
-#define ipipe_mm_switch_unprotect(flags)	do { (void)(flags); } while(0)
 
 #endif /* !CONFIG_IPIPE */
 
