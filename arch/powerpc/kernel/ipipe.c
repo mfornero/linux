@@ -463,7 +463,6 @@ EXPORT_SYMBOL_GPL(switch_slb);
 EXPORT_SYMBOL_GPL(switch_stab);
 EXPORT_SYMBOL_GPL(__flush_tlb_pending);
 EXPORT_SYMBOL_GPL(mmu_linear_psize);
-EXPORT_SYMBOL_GPL(mmu_psize_defs);
 #else  /* !CONFIG_PPC64 */
 void atomic_set_mask(unsigned long mask, unsigned long *ptr);
 void atomic_clear_mask(unsigned long mask, unsigned long *ptr);
