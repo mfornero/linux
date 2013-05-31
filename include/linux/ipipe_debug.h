@@ -73,14 +73,6 @@ static inline void ipipe_restore_context_nmi(void) { }
 
 #endif	/* !CONFIG_IPIPE_DEBUG_CONTEXT */
 
-#ifdef CONFIG_IPIPE_DEBUG_INTERNAL
-#define IPIPE_WARN(c)		WARN_ON(c)
-#define IPIPE_WARN_ONCE(c)	WARN_ON_ONCE(c)
-#else
-#define IPIPE_WARN(c)		do { (void)(c); } while (0)
-#define IPIPE_WARN_ONCE(c)	do { (void)(c); } while (0)
-#endif
-
 #ifdef CONFIG_IPIPE_DEBUG
 
 #define ipipe_check_irqoff()					\
@@ -94,5 +86,13 @@ static inline void ipipe_restore_context_nmi(void) { }
 static inline void ipipe_check_irqoff(void) { }
 
 #endif /* !CONFIG_IPIPE_DEBUG */
+
+#ifdef CONFIG_IPIPE_DEBUG_INTERNAL
+#define IPIPE_WARN(c)		WARN_ON(c)
+#define IPIPE_WARN_ONCE(c)	WARN_ON_ONCE(c)
+#else
+#define IPIPE_WARN(c)		do { (void)(c); } while (0)
+#define IPIPE_WARN_ONCE(c)	do { (void)(c); } while (0)
+#endif
 
 #endif /* !__LINUX_IPIPE_DEBUG_H */
