@@ -27,7 +27,7 @@ void __check_vmalloc_seq(struct mm_struct *mm);
 
 int check_and_switch_context(struct mm_struct *mm, 
 			     struct task_struct *tsk, bool root_p);
-#define init_new_context(tsk,mm)	({ mm->context.id = 0; })
+#define init_new_context(tsk,mm)	({ atomic64_set(&mm->context.id, 0); 0; })
 
 #else	/* !CONFIG_CPU_HAS_ASID */
 
