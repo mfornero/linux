@@ -185,7 +185,6 @@ int check_and_switch_context(struct mm_struct *mm, struct task_struct *tsk, bool
 {
 	unsigned long flags;
 	unsigned int cpu = ipipe_processor_id();
-	unsigned int cpu = smp_processor_id();
 	u64 asid;
 
 	if (unlikely(mm->context.vmalloc_seq != init_mm.context.vmalloc_seq))
