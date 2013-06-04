@@ -188,7 +188,7 @@ at91_aic5_handle_irq(struct pt_regs *regs)
 		ipipe_handle_multi_irq(irqnr, regs);
 }
 
-static void at91_aic_hard_mask_irq(struct irq_data *d)
+static inline void at91_aic_hard_mask_irq(struct irq_data *d)
 {
 	/* Disable interrupt on AIC */
 	at91_aic_write(AT91_AIC_IDCR, 1 << d->hwirq);
@@ -215,7 +215,7 @@ static void __maybe_unused at91_aic5_mask_irq(struct irq_data *d)
 	clear_backup(d->hwirq);
 }
 
-static void at91_aic_hard_unmask_irq(struct irq_data *d)
+static inline void at91_aic_hard_unmask_irq(struct irq_data *d)
 {
 	/* Enable interrupt on AIC */
 	at91_aic_write(AT91_AIC_IECR, 1 << d->hwirq);

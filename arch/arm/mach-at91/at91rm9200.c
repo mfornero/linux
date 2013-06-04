@@ -153,7 +153,7 @@ static struct clk tc5_clk = {
 static struct map_desc at91rm9200_io_desc[] __initdata = {
 #ifdef CONFIG_IPIPE
 	{
-		.virtual	= AT91_VA_BASE_TCB0,
+		.virtual	= (unsigned long)AT91_VA_BASE_TCB0,
 		.pfn		= __phys_to_pfn(AT91_BASE_TCB0),
 		.length		= SZ_16K,
 		.type		= MT_DEVICE,
