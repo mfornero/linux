@@ -43,6 +43,10 @@ static void __ipipe_do_IRQ(unsigned int irq, void *cookie);
 
 static void __ipipe_no_irqtail(void);
 
+static atomic_t __ipipe_irq_lvdepth[IVG15 + 1];
+
+static unsigned long __ipipe_irq_lvmask = bfin_no_irqs;
+
 unsigned long __ipipe_irq_tail_hook = (unsigned long)__ipipe_no_irqtail;
 EXPORT_SYMBOL_GPL(__ipipe_irq_tail_hook);
 
@@ -51,11 +55,6 @@ EXPORT_SYMBOL_GPL(__ipipe_core_clock);
 
 unsigned long __ipipe_freq_scale;
 EXPORT_SYMBOL_GPL(__ipipe_freq_scale);
-
-atomic_t __ipipe_irq_lvdepth[IVG15 + 1];
-
-unsigned long __ipipe_irq_lvmask = bfin_no_irqs;
-EXPORT_SYMBOL_GPL(__ipipe_irq_lvmask);
 
 static void __ipipe_ack_irq(unsigned irq, struct irq_desc *desc)
 {
@@ -95,7 +94,7 @@ void __ipipe_handle_irq(unsigned int irq, struct pt_regs *regs) /* hw IRQs off *
 		__clear_bit(IPIPE_STALL_FLAG, &p->status);
 }
 
-void __ipipe_enable_irqdesc(struct ipipe_domain *ipd, unsigned irq)
+void __ipipe_enable_irqdesc(struct ipipe_domain *ipd, unsigned int irq)
 {
 	struct irq_desc *desc = irq_to_desc(irq);
 	int prio = __ipipe_get_irq_priority(irq);
@@ -106,7 +105,7 @@ void __ipipe_enable_irqdesc(struct ipipe_domain *ipd, unsigned irq)
 		__set_bit(prio, &__ipipe_irq_lvmask);
 }
 
-void __ipipe_disable_irqdesc(struct ipipe_domain *ipd, unsigned irq)
+void __ipipe_disable_irqdesc(struct ipipe_domain *ipd, unsigned int irq)
 {
 	int prio = __ipipe_get_irq_priority(irq);
 
@@ -322,7 +321,46 @@ void __ipipe_unlock_root(void)
 }
 EXPORT_SYMBOL_GPL(__ipipe_unlock_root);
 
-#if !defined(CONFIG_GENERIC_CLOCKEVENTS) || defined(CONFIG_TICKSOURCE_GPTMR0)
+/*
+ * We have two main options on the Blackfin for dealing with the clock
+ * event sources for both domains:
+ *
+ * - If CONFIG_GENERIC_CLOCKEVENTS is disabled (old cranky stuff), we
+ * force the system timer to GPT0.  This gives the head domain
+ * exclusive control over the Blackfin core timer.  Therefore, we have
+ * to flesh out the core timer request and release handlers since the
+ * regular kernel won't have set it up at boot.
+ *
+ * - If CONFIG_GENERIC_CLOCKEVENTS is enabled, then Linux may pick
+ * either GPT0 (CONFIG_TICKSOURCE_GPTMR0), or the core timer
+ * (CONFIG_TICKSOURCE_CORETMR) as its own tick source. Depending on
+ * what Kconfig says regarding this setting, we may have in turn:
+ *
+ * - CONFIG_TICKSOURCE_CORETMR is set, which means that both root
+ * (linux) and the head domain will have to share the core timer for
+ * timing duties. In this case, we don't register the core timer with
+ * the pipeline, we only connect the regular linux clock event
+ * structure to our ipipe_time timer structure via the ipipe_timer
+ * field in struct clock_event_device.
+ *
+ * - CONFIG_TICKSOURCE_GPTMR0 is set, in which case we reserve the
+ * core timer to the head domain, just like in the
+ * CONFIG_GENERIC_CLOCKEVENTS disabled case. We have to register the
+ * core timer with the pipeline, so that ipipe_select_timers() may
+ * find it.
+ */
+#if defined(CONFIG_GENERIC_CLOCKEVENTS) && defined(CONFIG_TICKSOURCE_CORETMR)
+
+static inline void icoretmr_request(struct ipipe_timer *timer, int steal)
+{
+}
+
+static inline void icoretmr_release(struct ipipe_timer *timer)
+{
+}
+
+#else /* !(CONFIG_GENERIC_CLOCKEVENTS && CONFIG_TICKSOURCE_CORETMR) */
+
 static void icoretmr_request(struct ipipe_timer *timer, int steal)
 {
 	bfin_write_TCNTL(TMPWR);
@@ -333,46 +371,40 @@ static void icoretmr_request(struct ipipe_timer *timer, int steal)
 	CSYNC();
 }
 
-static int icoretmr_set(unsigned long evt, void *timer)
-{
-	bfin_write_TCNTL(TMPWR);
-	CSYNC();
-	bfin_write_TCOUNT(evt - 1);
-	CSYNC();
-	bfin_write_TCNTL(TMPWR | TMREN);
-
-	return 0;
-}
-
-#ifdef CONFIG_DO_IRQ_L1
-__attribute__((l1_text))
-#endif
-static void icoretmr_ack(void)
-{
-	bfin_write_TIMER_STATUS(1); /* Latch TIMIL0 */
-}
-
 static void icoretmr_release(struct ipipe_timer *timer)
 {
 	/* Power down the core timer */
 	bfin_write_TCNTL(0);
 }
 
-static struct ipipe_timer icoretmr = {
+#endif /* !(CONFIG_GENERIC_CLOCKEVENTS && CONFIG_TICKSOURCE_CORETMR) */
+
+static int icoretmr_set(unsigned long evt, void *timer)
+{
+	bfin_write_TCNTL(TMPWR);
+	CSYNC();
+	bfin_write_TCOUNT(evt);
+	CSYNC();
+	bfin_write_TCNTL(TMPWR | TMREN);
+
+	return 0;
+}
+
+struct ipipe_timer bfin_coretmr_itimer = {
 	.irq			= IRQ_CORETMR,
 	.request		= icoretmr_request,
 	.set			= icoretmr_set,
-	.ack			= icoretmr_ack,
+	.ack			= NULL,
 	.release		= icoretmr_release,
-
 	.name			= "bfin_coretmr",
-	.rating			= 100,
+	.rating			= 500,
 	.min_delay_ticks	= 2,
 };
 
 void bfin_ipipe_coretmr_register(void)
 {
-	icoretmr.freq = get_cclk() / TIME_SCALE;
-	ipipe_timer_register(&icoretmr);
+	bfin_coretmr_itimer.freq = get_cclk() / TIME_SCALE;
+#if !(defined(CONFIG_GENERIC_CLOCKEVENTS) && defined(CONFIG_TICKSOURCE_CORETMR))
+	ipipe_timer_register(&bfin_coretmr_itimer);
+#endif
 }
-#endif /* !CLOCKEVENTS || GPTMR0 */

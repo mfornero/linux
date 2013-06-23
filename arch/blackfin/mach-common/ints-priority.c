@@ -289,10 +289,17 @@ static void bfin_sec_preflow_handler(struct irq_data *d)
 
 static void bfin_sec_mask_ack_irq(struct irq_data *d)
 {
+	unsigned int sid = BFIN_SYSIRQ(d->irq);
+	bfin_write_SEC_SCI(0, SEC_CSID, sid);
+}
+
+static void bfin_sec_mask_irq(struct irq_data *d)
+{
 	unsigned long flags = hard_local_irq_save();
 	unsigned int sid = BFIN_SYSIRQ(d->irq);
 
 	bfin_write_SEC_SCI(0, SEC_CSID, sid);
+	ipipe_lock_irq(d->irq);
 
 	hard_local_irq_restore(flags);
 }
@@ -303,8 +310,21 @@ static void bfin_sec_unmask_irq(struct irq_data *d)
 	unsigned int sid = BFIN_SYSIRQ(d->irq);
 
 	bfin_write32(SEC_END, sid);
+	ipipe_unlock_irq(d->irq);
 
 	hard_local_irq_restore(flags);
+}
+
+static void bfin_sec_hold_irq(struct irq_data *d)
+{
+	unsigned int sid = BFIN_SYSIRQ(d->irq);
+	bfin_write_SEC_SCI(0, SEC_CSID, sid);
+}
+
+static void bfin_sec_release_irq(struct irq_data *d)
+{
+	unsigned int sid = BFIN_SYSIRQ(d->irq);
+	bfin_write32(SEC_END, sid);
 }
 
 static void bfin_sec_enable_ssi(unsigned int sid)
@@ -1619,12 +1639,16 @@ void do_irq(int vec, struct pt_regs *fp)
 
 int __ipipe_get_irq_priority(unsigned int irq)
 {
-	int ient, prio;
+	int ient __maybe_unused, prio __maybe_unused;
 
 	if (irq <= IRQ_CORETMR)
 		return irq;
 
 #ifdef SEC_GCTL
+	/*
+	 * XXX: The SEC directs all system interrupts to core
+	 * IVG11. This basically disables the optimization on 60x...
+	 */
 	if (irq >= BFIN_IRQ(0))
 		return IVG11;
 #else
