@@ -302,6 +302,14 @@ void __ipipe_enable_pipeline(void)
 	ipipe_critical_exit(flags);
 }
 
+#ifdef CONFIG_IPIPE_DEBUG_INTERNAL
+unsigned asmlinkage __ipipe_bugon_irqs_enabled(unsigned x)
+{
+	BUG_ON(!hard_irqs_disabled());
+	return x;		/* Preserve r0 */
+}
+#endif
+
 asmlinkage int __ipipe_check_root(void)
 {
 	return __ipipe_root_p;
@@ -377,6 +385,10 @@ asmlinkage int __ipipe_syscall_root(unsigned long scno, struct pt_regs *regs)
 out:
 	regs->ARM_r7 = orig_r7;
 
+#ifdef CONFIG_IPIPE_DEBUG_INTERNAL
+	BUG_ON(ret > 0 && current_thread_info()->restart_block.fn != 
+	       do_no_restart_syscall);
+#endif
 	return -ret;
 }
 

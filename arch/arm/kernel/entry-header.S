@@ -75,6 +75,9 @@
 
 #ifndef CONFIG_THUMB2_KERNEL
 	.macro	svc_exit, rpsr
+#ifdef CONFIG_IPIPE_DEBUG_INTERNAL
+	bl	__ipipe_bugon_irqs_enabled
+#endif
 #ifdef CONFIG_IPIPE_TRACE_IRQSOFF
 	mov	r0, #2		/* IPIPE_TRACE_END */
 	mov	r3, #0x90000000
@@ -96,6 +99,9 @@
 	.endm
 
 	.macro	restore_user_regs, fast = 0, offset = 0
+#ifdef CONFIG_IPIPE_DEBUG_INTERNAL
+	bl	__ipipe_bugon_irqs_enabled
+#endif
 #ifdef CONFIG_IPIPE_TRACE_IRQSOFF
 	.if	\fast
 	mov	r4, r0
@@ -141,6 +147,9 @@
 	.endm
 #else	/* CONFIG_THUMB2_KERNEL */
 	.macro	svc_exit, rpsr
+#ifdef CONFIG_IPIPE_DEBUG_INTERNAL
+	bl	__ipipe_bugon_irqs_enabled
+#endif
 #ifdef CONFIG_IPIPE_TRACE_IRQSOFF
 	mov	r0, #2		/* IPIPE_TRACE_END */
 	mov	r3, #0x90000000
@@ -159,6 +168,9 @@
 	.endm
 
 	.macro	restore_user_regs, fast = 0, offset = 0
+#ifdef CONFIG_IPIPE_DEBUG_INTERNAL
+	bl	__ipipe_bugon_irqs_enabled
+#endif
 #ifdef CONFIG_IPIPE_TRACE_IRQSOFF
 	.if	\fast
 	mov	r4, r0
