@@ -50,8 +50,9 @@ check_and_switch_context(struct mm_struct *mm,
 		 */
 		set_ti_thread_flag(task_thread_info(tsk), TIF_SWITCH_MM);
 		return -EAGAIN;
-	} else
-		cpu_switch_mm(mm->pgd, mm, fcse_switch_mm(mm));
+	} else {
+		cpu_switch_mm(mm->pgd, mm, fcse_switch_mm_start(mm));
+	}
 
 	return 0;
 }
@@ -61,7 +62,8 @@ extern void deferred_switch_mm(struct mm_struct *mm);
 #else /* !I-pipe */
 static inline void deferred_switch_mm(struct mm_struct *next)
 {
-	cpu_switch_mm(next->pgd, next, fcse_switch_mm(next));
+	cpu_switch_mm(next->pgd, next, fcse_switch_mm_start(next));
+	fcse_switch_mm_end(next);
 }
 #endif /* !I-pipe */
 
@@ -163,7 +165,7 @@ __do_switch_mm(struct mm_struct *prev, struct mm_struct *next,
 		if (tsk)
 			set_tsk_thread_flag(tsk, TIF_SWITCHED);
 #endif /* CONFIG_IPIPE && CONFIG_ARM_FCSE */
-		if (cache_is_vivt() && prev && prev != next)
+		if (cache_is_vivt() && prev)
 			cpumask_clear_cpu(cpu, mm_cpumask(prev));
 	} else
 		fcse_mark_dirty(next);
@@ -183,6 +185,7 @@ ipipe_switch_mm_head(struct mm_struct *prev, struct mm_struct *next,
 			   struct task_struct *tsk)
 {
 	__do_switch_mm(prev, next, tsk, false);
+	fcse_switch_mm_end(next);
 }
 
 static inline void 

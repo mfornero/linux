@@ -100,15 +100,24 @@ struct fcse_user {
 };
 extern struct fcse_user fcse_pids_user[];
 extern struct mm_struct *fcse_large_process;
-int fcse_switch_mm_inner(struct mm_struct *next);
+int fcse_switch_mm_start_inner(struct mm_struct *next);
+void fcse_switch_mm_end_inner(struct mm_struct *next);
 void fcse_pid_reference(unsigned pid);
 
-static inline int fcse_switch_mm(struct mm_struct *next)
+static inline int fcse_switch_mm_start(struct mm_struct *next)
 {
 	if (!cache_is_vivt())
 		return 0;
 
-	return fcse_switch_mm_inner(next);
+	return fcse_switch_mm_start_inner(next);
+}
+
+static inline void fcse_switch_mm_end(struct mm_struct *next)
+{
+	if (!cache_is_vivt())
+		return;
+
+	fcse_switch_mm_end_inner(next);
 }
 
 static inline int fcse_mm_in_cache(struct mm_struct *mm)
@@ -120,8 +129,12 @@ static inline int fcse_mm_in_cache(struct mm_struct *mm)
 	return res;
 }
 #else /* CONFIG_ARM_FCSE_GUARANTEED */
-static inline int
-fcse_switch_mm(struct mm_struct *next)
+static inline int fcse_switch_mm_start(struct mm_struct *next)
+{
+	return 0;
+}
+
+static inline void fcse_switch_mm_end(struct mm_struct *next)
 {
 	unsigned fcse_pid;
 
@@ -166,7 +179,8 @@ static inline void fcse_mark_dirty(struct mm_struct *mm)
 
 #define fcse() (cache_is_vivt())
 #else /* ! CONFIG_ARM_FCSE */
-#define fcse_switch_mm(next) 1
+#define fcse_switch_mm_start(next) 1
+#define fcse_switch_mm_end(next) do { (void)(next); } while(0)
 #define fcse_mva_to_va(mva) (mva)
 #define fcse_va_to_mva(mm, x) ({ (void)(mm); (x); })
 #define fcse_mark_dirty(mm) do { (void)(mm); } while(0)

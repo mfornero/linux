@@ -465,7 +465,12 @@ void __switch_mm_inner(struct mm_struct *prev, struct mm_struct *next,
 		 */
 		flags = hard_local_irq_save();
 		if (__test_and_clear_bit(TIF_MMSWITCH_INT, &tip->flags) == 0) {
-			*active_mm = rc < 0 ? prev : next;
+			if (rc < 0)
+				*active_mm = prev;
+			else {
+				*active_mm = next;
+				fcse_switch_mm_end(next);
+			}
 			hard_local_irq_restore(flags);
 			return;
 		}
@@ -483,7 +488,12 @@ void __switch_mm_inner(struct mm_struct *prev, struct mm_struct *next,
 		prev = NULL;
 	}
 #elif defined(CONFIG_IPIPE_WANT_ACTIVE_MM)
-	*active_mm = rc < 0 ? prev: next;
+	if (rc < 0)
+		*active_mm = prev;
+	else {
+		*active_mm = next;
+		fcse_switch_mm_end(next);
+	}
 #else /* !IPIPE_WANT_ACTIVE_MM && !IPIPE_WANT_PREEMPTIBLE_SWITCH */
 	(void)rc;
 #endif /* !IPIPE_WANT_ACTIVE_MM && !IPIPE_WANT_PREEMPTIBLE_SWITCH */
@@ -517,6 +527,7 @@ void deferred_switch_mm(struct mm_struct *next)
 		flags = hard_local_irq_save();
 		if (__test_and_clear_bit(TIF_MMSWITCH_INT, &tip->flags) == 0) {
 			*active_mm = next;
+			fcse_switch_mm_end(next);
 			hard_local_irq_restore(flags);
 			return;
 		}
@@ -525,6 +536,7 @@ void deferred_switch_mm(struct mm_struct *next)
 	}
 #elif defined(CONFIG_IPIPE_WANT_ACTIVE_MM)
 	*active_mm = next;
+	fcse_switch_mm_end(next);
 #endif /* CONFIG_IPIPE_WANT_ACTIVE_MM */
 }
 #endif
