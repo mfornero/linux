@@ -447,6 +447,9 @@ void __switch_mm_inner(struct mm_struct *prev, struct mm_struct *next,
 #endif /* CONFIG_IPIPE_WANT_ACTIVE_MM */
 #ifdef CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH
 	struct thread_info *const tip = current_thread_info();
+	prev = *active_mm;
+	clear_bit(TIF_MMSWITCH_INT, &tip->flags);
+	barrier();
 	*active_mm = NULL;
 	barrier();
 	for (;;) {
@@ -456,11 +459,10 @@ void __switch_mm_inner(struct mm_struct *prev, struct mm_struct *next,
 		int rc = __do_switch_mm(prev, next, tsk, true);
 
 #ifdef CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH
-		/* It is absolutely unavoidable to read the
-		   thread_info flags and set the active_mm
-		   atomically. Other (previous) solutions lead to
-		   hardly reproduceable disasters. */
-
+		/* 
+		 * Reading thread_info flags and setting active_mm
+		 * must be done atomically.
+		 */
 		flags = hard_local_irq_save();
 		if (__test_and_clear_bit(TIF_MMSWITCH_INT, &tip->flags) == 0) {
 			*active_mm = rc < 0 ? prev : next;
@@ -468,11 +470,23 @@ void __switch_mm_inner(struct mm_struct *prev, struct mm_struct *next,
 			return;
 		}
 		hard_local_irq_restore(flags);
+		
+		if (rc < 0)
+			/* 
+			 * We were interrupted by head domain, which
+			 * may have changed the mm context, mm context
+			 * is now unknown, but will be switched in
+			 * deferred_switch_mm
+			 */
+			return;
+
 		prev = NULL;
 	}
 #elif defined(CONFIG_IPIPE_WANT_ACTIVE_MM)
 	*active_mm = rc < 0 ? prev: next;
-#endif /* CONFIG_IPIPE_WANT_ACTIVE_MM */
+#else /* !IPIPE_WANT_ACTIVE_MM && !IPIPE_WANT_PREEMPTIBLE_SWITCH */
+	(void)rc;
+#endif /* !IPIPE_WANT_ACTIVE_MM && !IPIPE_WANT_PREEMPTIBLE_SWITCH */
 }
 
 #ifdef finish_arch_post_lock_switch
@@ -481,23 +495,25 @@ void deferred_switch_mm(struct mm_struct *next)
 #ifdef CONFIG_IPIPE_WANT_ACTIVE_MM
 	struct mm_struct ** const active_mm =
 		__this_cpu_ptr(&ipipe_percpu.active_mm);
+	struct mm_struct *prev = *active_mm;
 #endif /* CONFIG_IPIPE_WANT_ACTIVE_MM */
 #ifdef CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH
 	struct thread_info *const tip = current_thread_info();
+	clear_bit(TIF_MMSWITCH_INT, &tip->flags);
+	barrier();
 	*active_mm = NULL;
 	barrier();
 	for (;;) {
 		unsigned long flags;
 #endif /* CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH */
 
-		__deferred_switch_mm(next);
+		__do_switch_mm(prev, next, NULL, false);
 
 #ifdef CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH
-		/* It is absolutely unavoidable to read the
-		   thread_info flags and set the active_mm
-		   atomically. Other (previous) solutions lead to
-		   hardly reproduceable disasters. */
-
+		/* 
+		 * Reading thread_info flags and setting active_mm
+		 * must be done atomically.
+		 */
 		flags = hard_local_irq_save();
 		if (__test_and_clear_bit(TIF_MMSWITCH_INT, &tip->flags) == 0) {
 			*active_mm = next;
@@ -505,6 +521,7 @@ void deferred_switch_mm(struct mm_struct *next)
 			return;
 		}
 		hard_local_irq_restore(flags);
+		prev = NULL;
 	}
 #elif defined(CONFIG_IPIPE_WANT_ACTIVE_MM)
 	*active_mm = next;
