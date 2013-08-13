@@ -438,9 +438,9 @@ ENTRY(vector_swi)
 	mov	r0, scno
 	bl	__ipipe_syscall_root
 	cmp	r0, #0
-	bgt	__ipipe_ret_to_user
+	blt	__ipipe_ret_to_user
 	get_thread_info tsk
-	blt	ret_slow_syscall
+	bgt	ret_slow_syscall
 	ldmia	sp, { r0 - r3 }
 #endif /* CONFIG_IPIPE */
 

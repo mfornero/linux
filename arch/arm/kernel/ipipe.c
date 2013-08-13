@@ -351,9 +351,9 @@ asmlinkage int __ipipe_syscall_root(unsigned long scno, struct pt_regs *regs)
 	/*
 	 * This routine either returns:
 	 * 0 -- if the syscall is to be passed to Linux;
-	 * >0 -- if the syscall should not be passed to Linux, and no
+	 * <0 -- if the syscall should not be passed to Linux, and no
 	 * tail work should be performed;
-	 * <0 -- if the syscall should not be passed to Linux but the
+	 * >0 -- if the syscall should not be passed to Linux but the
 	 * tail work has to be performed (for handling signals etc).
 	 */
 
@@ -389,7 +389,7 @@ out:
 	BUG_ON(ret > 0 && current_thread_info()->restart_block.fn != 
 	       do_no_restart_syscall);
 #endif
-	return -ret;
+	return ret;
 }
 
 void __ipipe_exit_irq(struct pt_regs *regs)
