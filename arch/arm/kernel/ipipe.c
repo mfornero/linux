@@ -453,7 +453,7 @@ void __switch_mm_inner(struct mm_struct *prev, struct mm_struct *next,
 		unsigned long flags;
 #endif /* CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH */
 
-		int rc = __do_switch_mm(prev, next, tsk, true);
+		int rc __maybe_unused = __do_switch_mm(prev, next, tsk, true);
 
 #ifdef CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH
 		/* It is absolutely unavoidable to read the
