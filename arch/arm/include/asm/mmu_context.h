@@ -26,7 +26,7 @@ void __check_vmalloc_seq(struct mm_struct *mm);
 #ifdef CONFIG_CPU_HAS_ASID
 
 int check_and_switch_context(struct mm_struct *mm, 
-			     struct task_struct *tsk, bool root_p);
+			     struct task_struct *tsk, bool may_defer);
 #define init_new_context(tsk,mm)	({ atomic64_set(&mm->context.id, 0); 0; })
 
 #else	/* !CONFIG_CPU_HAS_ASID */
@@ -35,12 +35,12 @@ int check_and_switch_context(struct mm_struct *mm,
 
 static inline int 
 check_and_switch_context(struct mm_struct *mm, 
-			 struct task_struct *tsk, bool root_p)
+			 struct task_struct *tsk, bool may_defer)
 {
 	if (unlikely(mm->context.vmalloc_seq != init_mm.context.vmalloc_seq))
 		__check_vmalloc_seq(mm);
 
-	if (root_p && irqs_disabled()) {
+	if (may_defer && irqs_disabled()) {
 		/*
 		 * cpu_switch_mm() needs to flush the VIVT caches. To avoid
 		 * high interrupt latencies, defer the call and continue
@@ -50,21 +50,21 @@ check_and_switch_context(struct mm_struct *mm,
 		 */
 		set_ti_thread_flag(task_thread_info(tsk), TIF_SWITCH_MM);
 		return -EAGAIN;
-	} else
-		cpu_switch_mm(mm->pgd, mm, fcse_switch_mm(mm));
+	} else {
+		cpu_switch_mm(mm->pgd, mm, fcse_switch_mm_start(mm));
+	}
 
 	return 0;
-}
-
-static inline void __deferred_switch_mm(struct mm_struct *next)
-{
-	cpu_switch_mm(next->pgd, next, fcse_switch_mm(next));
 }
 
 #ifdef CONFIG_IPIPE
 extern void deferred_switch_mm(struct mm_struct *mm);
 #else /* !I-pipe */
-#define deferred_switch_mm(mm) __deferred_switch_mm(mm)
+static inline void deferred_switch_mm(struct mm_struct *next)
+{
+	cpu_switch_mm(next->pgd, next, fcse_switch_mm_start(next));
+	fcse_switch_mm_end(next);
+}
 #endif /* !I-pipe */
 
 #define finish_arch_post_lock_switch \
@@ -144,9 +144,8 @@ enter_lazy_tlb(struct mm_struct *mm, struct task_struct *tsk)
  */
 static inline int
 __do_switch_mm(struct mm_struct *prev, struct mm_struct *next,
-	       struct task_struct *tsk, bool root_p)
+	       struct task_struct *tsk, bool may_defer)
 {
-	int rc = 0;
 #ifdef CONFIG_MMU
 	const unsigned int cpu = ipipe_processor_id();
 
@@ -157,17 +156,21 @@ __do_switch_mm(struct mm_struct *prev, struct mm_struct *next,
 		__flush_icache_all();
 #endif
 	if (!cpumask_test_and_set_cpu(cpu, mm_cpumask(next)) || prev != next) {
-		rc = check_and_switch_context(next, tsk, root_p);
+		int rc = check_and_switch_context(next, tsk, may_defer);
+		if (rc < 0) {
+			cpumask_clear_cpu(cpu, mm_cpumask(next));
+			return rc;
+		}
 #if defined(CONFIG_IPIPE) && defined(CONFIG_ARM_FCSE)
 		if (tsk)
 			set_tsk_thread_flag(tsk, TIF_SWITCHED);
 #endif /* CONFIG_IPIPE && CONFIG_ARM_FCSE */
-		if (cache_is_vivt() && prev && prev != next)
+		if (cache_is_vivt() && prev)
 			cpumask_clear_cpu(cpu, mm_cpumask(prev));
 	} else
 		fcse_mark_dirty(next);
 #endif /* CONFIG_MMU */
-	return rc;
+	return 0;
 }
 
 #if defined(CONFIG_IPIPE) && defined(CONFIG_MMU)
@@ -182,6 +185,7 @@ ipipe_switch_mm_head(struct mm_struct *prev, struct mm_struct *next,
 			   struct task_struct *tsk)
 {
 	__do_switch_mm(prev, next, tsk, false);
+	fcse_switch_mm_end(next);
 }
 
 static inline void 

@@ -92,7 +92,7 @@ asmlinkage void __exception_irq_entry icoll_handle_irq(struct pt_regs *regs)
 		if (irqnr != 0x7f) {
 			__raw_writel(irqnr, icoll_base + HW_ICOLL_VECTOR);
 			irqnr = irq_find_mapping(icoll_domain, irqnr);
-			handle_IRQ(irqnr, regs);
+			ipipe_handle_multi_irq(irqnr, regs);
 			continue;
 		}
 		break;
