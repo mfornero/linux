@@ -105,9 +105,10 @@ struct ipipe_trap_data {
 #define IPIPE_KEVT_SCHEDULE	0
 #define IPIPE_KEVT_SIGWAKE	1
 #define IPIPE_KEVT_SETSCHED	2
-#define IPIPE_KEVT_EXIT		3
-#define IPIPE_KEVT_CLEANUP	4
-#define IPIPE_KEVT_HOSTRT	5
+#define IPIPE_KEVT_SETAFFINITY	3
+#define IPIPE_KEVT_EXIT		4
+#define IPIPE_KEVT_CLEANUP	5
+#define IPIPE_KEVT_HOSTRT	6
 
 struct ipipe_vm_notifier {
 	void (*handler)(struct ipipe_vm_notifier *nfy);
@@ -219,6 +220,12 @@ int __ipipe_notify_kevent(int event, void *data);
 			__ipipe_notify_kevent(IPIPE_KEVT_SIGWAKE, p);	\
 	} while (0)
 
+#define __ipipe_report_setaffinity(p)					\
+	do {								\
+		if (ipipe_notifier_enabled_p(p))			\
+			__ipipe_notify_kevent(IPIPE_KEVT_SETAFFINITY, p); \
+	} while (0)
+
 #define __ipipe_report_exit(p)						\
 	do {								\
 		if (ipipe_notifier_enabled_p(p))			\
@@ -260,10 +267,11 @@ struct ipipe_task_info {
 #define IPIPE_EVENT_SCHEDULE	IPIPE_FIRST_EVENT
 #define IPIPE_EVENT_SIGWAKE	(IPIPE_FIRST_EVENT + 1)
 #define IPIPE_EVENT_SETSCHED	(IPIPE_FIRST_EVENT + 2)
-#define IPIPE_EVENT_EXIT	(IPIPE_FIRST_EVENT + 3)
-#define IPIPE_EVENT_CLEANUP	(IPIPE_FIRST_EVENT + 4)
-#define IPIPE_EVENT_HOSTRT	(IPIPE_FIRST_EVENT + 5)
-#define IPIPE_EVENT_SYSCALL	(IPIPE_FIRST_EVENT + 6)
+#define IPIPE_EVENT_SETAFFINITY	(IPIPE_FIRST_EVENT + 3)
+#define IPIPE_EVENT_EXIT	(IPIPE_FIRST_EVENT + 4)
+#define IPIPE_EVENT_CLEANUP	(IPIPE_FIRST_EVENT + 5)
+#define IPIPE_EVENT_HOSTRT	(IPIPE_FIRST_EVENT + 6)
+#define IPIPE_EVENT_SYSCALL	(IPIPE_FIRST_EVENT + 7)
 #define IPIPE_LAST_EVENT	IPIPE_EVENT_SYSCALL
 #define IPIPE_NR_EVENTS		(IPIPE_LAST_EVENT + 1)
 
@@ -317,6 +325,8 @@ static inline void __ipipe_init_proc(void) { }
 static inline void __ipipe_idle(void) { }
 
 static inline void __ipipe_report_sigwake(struct task_struct *p) { }
+
+static inline void __ipipe_report_setaffinity(struct task_struct *p) { }
 
 static inline void __ipipe_report_setsched(struct task_struct *p) { }
 
