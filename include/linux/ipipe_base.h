@@ -220,10 +220,19 @@ int __ipipe_notify_kevent(int event, void *data);
 			__ipipe_notify_kevent(IPIPE_KEVT_SIGWAKE, p);	\
 	} while (0)
 
-#define __ipipe_report_setaffinity(p)					\
+struct ipipe_cpu_migration_data {
+	struct task_struct *task;
+	int dest_cpu;
+};
+
+#define __ipipe_report_setaffinity(__p, __dest_cpu)			\
 	do {								\
-		if (ipipe_notifier_enabled_p(p))			\
-			__ipipe_notify_kevent(IPIPE_KEVT_SETAFFINITY, p); \
+		struct ipipe_cpu_migration_data d = {			\
+			.task = (__p),					\
+			.dest_cpu = (__dest_cpu),			\
+		};							\
+		if (ipipe_notifier_enabled_p(__p))			\
+			__ipipe_notify_kevent(IPIPE_KEVT_SETAFFINITY, &d); \
 	} while (0)
 
 #define __ipipe_report_exit(p)						\
@@ -326,7 +335,8 @@ static inline void __ipipe_idle(void) { }
 
 static inline void __ipipe_report_sigwake(struct task_struct *p) { }
 
-static inline void __ipipe_report_setaffinity(struct task_struct *p) { }
+static inline void __ipipe_report_setaffinity(struct task_struct *p,
+					      int dest_cpu) { }
 
 static inline void __ipipe_report_setsched(struct task_struct *p) { }
 

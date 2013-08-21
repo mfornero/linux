@@ -4712,7 +4712,6 @@ void do_set_cpus_allowed(struct task_struct *p, const struct cpumask *new_mask)
 
 	cpumask_copy(&p->cpus_allowed, new_mask);
 	p->nr_cpus_allowed = cpumask_weight(new_mask);
-	__ipipe_report_setaffinity(p);
 }
 
 /*
@@ -4763,10 +4762,13 @@ int set_cpus_allowed_ptr(struct task_struct *p, const struct cpumask *new_mask)
 	do_set_cpus_allowed(p, new_mask);
 
 	/* Can the task run on the task's current CPU? If so, we're done */
-	if (cpumask_test_cpu(task_cpu(p), new_mask))
+	if (cpumask_test_cpu(task_cpu(p), new_mask)) {
+		__ipipe_report_setaffinity(p, task_cpu(p));
 		goto out;
+	}
 
 	dest_cpu = cpumask_any_and(cpu_active_mask, new_mask);
+	__ipipe_report_setaffinity(p, dest_cpu);
 	if (p->on_rq) {
 		struct migration_arg arg = { p, dest_cpu };
 		/* Need help from migration thread: drop lock and wait. */
