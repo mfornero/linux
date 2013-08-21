@@ -84,16 +84,19 @@ BEGIN {
     driver_arch["pci/htirq.c"]="x86"
 }
 
-match($0, /^diff --git a\/arch\/([^[:blank:]\/]*)/, arch) {
-    a=arch[1]
+match($0, /^diff --git a\/arch\/([^ \t\/]*)/) {
+    split(substr($0, RSTART, RLENGTH), arch, /\//)
+    a=arch[3]
 
     set_current_arch(a)
     print $0 >> current_file
     next
 }
 
-match($0, /^diff --git a\/drivers\/([^[:blank:]]*)/, file) {
-    f=file[1]
+match($0, /^diff --git a\/drivers\/([^ \t]*)/) {
+    file=substr($0, RSTART, RLENGTH)
+    sub(/^diff --git a\/drivers\//, "", file)
+    f=file
 
     if (!driver_arch[f]) {
 	 print "Error unknown architecture for driver "f
@@ -120,8 +123,9 @@ match($0, /^diff --git a\/drivers\/([^[:blank:]]*)/, file) {
     next
 }
 
-match ($0, /#define [I]PIPE_CORE_RELEASE[[:blank:]]*([^[:blank:]]*)/, vers) {
-    version[current_arch]=vers[1]
+match ($0, /#define [I]PIPE_CORE_RELEASE[ \t]*([^ \t]*)/) {
+    split(substr($0, RSTART, RLENGTH), vers, /[ \t]/)
+    version[current_arch]=vers[3]
 }
 
 {
