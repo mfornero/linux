@@ -139,12 +139,11 @@ static inline void fcse_switch_mm_end(struct mm_struct *next)
 	unsigned fcse_pid;
 
 	if (!cache_is_vivt())
-		return 0;
+		return;
 
 	fcse_pid = next->context.fcse.pid >> FCSE_PID_SHIFT;
 	set_bit(FCSE_PID_MAX - fcse_pid, fcse_pids_cache_dirty);
 	fcse_pid_set(next->context.fcse.pid);
-	return 0;
 }
 
 static inline int fcse_mm_in_cache(struct mm_struct *mm)
