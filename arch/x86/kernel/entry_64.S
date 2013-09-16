@@ -1377,7 +1377,7 @@ END(\sym)
 .endm
 
 #define INIT_TSS_IST(x) PER_CPU_VAR(init_tss) + (TSS_ist + ((x) - 1) * 8)
-.macro paranoidzeroentry_ist sym do_sym ist ex_code=0
+.macro paranoidzeroentry_ist sym do_sym ist
 ENTRY(\sym)
 	INTR_FRAME
 	ASM_CLAC
@@ -1387,26 +1387,11 @@ ENTRY(\sym)
 	CFI_ADJUST_CFA_OFFSET ORIG_RAX-R15
 	call save_paranoid
 	movq %rsp,%rdi		/* pt_regs pointer */
-#ifdef CONFIG_IPIPE
-	.if \ex_code
-	movq $\ex_code,%rsi
-	call __ipipe_divert_exception   /* handle(regs, ex_code) */
 	TRACE_IRQS_OFF_DEBUG
-	testl %eax,%eax
-	jnz 1f
-	movq %rsp,%rdi
-	.endif
-#else
-	TRACE_IRQS_OFF_DEBUG
-#endif
 	xorl %esi,%esi		/* no error code */
 	subq $EXCEPTION_STKSZ, INIT_TSS_IST(\ist)
 	call \do_sym
 	addq $EXCEPTION_STKSZ, INIT_TSS_IST(\ist)
-#ifdef CONFIG_IPIPE
-	xorl %eax,%eax		/* tell paranoid_exit to propagate the exception */
-1:
-#endif
 	jmp paranoid_exit	/* %ebx: no swapgs flag */
 	CFI_ENDPROC
 END(\sym)
