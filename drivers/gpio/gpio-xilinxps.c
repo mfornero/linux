@@ -21,6 +21,7 @@
 #include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/irq.h>
+#include <linux/ipipe.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
@@ -90,7 +91,7 @@ struct xgpiops {
 	unsigned int irq;
 	unsigned int irq_base;
 	struct clk *clk;
-	spinlock_t gpio_lock;
+	ipipe_spinlock_t gpio_lock;
 };
 
 /**
@@ -423,7 +424,7 @@ static void xgpiops_irqhandler(unsigned int irq, struct irq_desc *desc)
 			chip->irq_ack(&gpio_irq_desc->irq_data);
 
 			/* call the pin specific handler */
-			generic_handle_irq(gpio_irq);
+			ipipe_handle_demuxed_irq(gpio_irq);
 		}
 		/* shift to first virtual irq of next bank */
 		gpio_irq = (int)irq_get_handler_data(irq) +
