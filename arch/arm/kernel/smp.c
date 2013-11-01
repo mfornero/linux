@@ -434,24 +434,14 @@ void arch_send_call_function_single_ipi(int cpu)
 	smp_cross_call(cpumask_of(cpu), IPI_CALL_FUNC_SINGLE);
 }
 
-struct ipi {
-	const char *desc;
-	void (*handler)(void);
-};
-
-static void ipi_timer(void);
-static void ipi_cpu_stop(void);
-
-static struct ipi ipi_types[NR_IPI] = {
-#define S(x, s, f)	[x].desc = s, [x].handler = f
-	S(IPI_WAKEUP, "CPU wakeup interrupts", NULL),
-	S(IPI_TIMER, "Timer broadcast interrupts", ipi_timer),
-	S(IPI_RESCHEDULE, "Rescheduling interrupts", scheduler_ipi),
-	S(IPI_CALL_FUNC, "Function call interrupts",
-					generic_smp_call_function_interrupt),
-	S(IPI_CALL_FUNC_SINGLE, "Single function call interrupts",
-				generic_smp_call_function_single_interrupt),
-	S(IPI_CPU_STOP, "CPU stop interrupts", ipi_cpu_stop),
+static const char *ipi_types[NR_IPI] = {
+#define S(x,s)	[x] = s
+	S(IPI_WAKEUP, "CPU wakeup interrupts"),
+	S(IPI_TIMER, "Timer broadcast interrupts"),
+	S(IPI_RESCHEDULE, "Rescheduling interrupts"),
+	S(IPI_CALL_FUNC, "Function call interrupts"),
+	S(IPI_CALL_FUNC_SINGLE, "Single function call interrupts"),
+	S(IPI_CPU_STOP, "CPU stop interrupts"),
 };
 
 void show_ipi_list(struct seq_file *p, int prec)
@@ -459,13 +449,13 @@ void show_ipi_list(struct seq_file *p, int prec)
 	unsigned int cpu, i;
 
 	for (i = 0; i < NR_IPI; i++) {
-		if (ipi_types[i].handler) {
-			seq_printf(p, "%*s%u: ", prec - 1, "IPI", i);
-			for_each_present_cpu(cpu)
-				seq_printf(p, "%10u ",
-					__get_irq_stat(cpu, ipi_irqs[i]));
-			seq_printf(p, " %s\n", ipi_types[i].desc);
-		}
+		seq_printf(p, "%*s%u: ", prec - 1, "IPI", i);
+
+		for_each_online_cpu(cpu)
+			seq_printf(p, "%10u ",
+				   __get_irq_stat(cpu, ipi_irqs[i]));
+
+		seq_printf(p, " %s\n", ipi_types[i]);
 	}
 }
 
@@ -567,10 +557,8 @@ static DEFINE_RAW_SPINLOCK(stop_lock);
 /*
  * ipi_cpu_stop - handle IPI from smp_send_stop()
  */
-static void ipi_cpu_stop(void)
+static void ipi_cpu_stop(unsigned int cpu)
 {
-	unsigned int cpu = smp_processor_id();
-
 	if (system_state == SYSTEM_BOOTING ||
 	    system_state == SYSTEM_RUNNING) {
 		raw_spin_lock(&stop_lock);
@@ -601,48 +589,48 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 	unsigned int cpu = smp_processor_id();
 	struct pt_regs *old_regs = set_irq_regs(regs);
 
-	if (ipi_types[ipinr].handler) {
+	if (ipinr < NR_IPI)
 		__inc_irq_stat(cpu, ipi_irqs[ipinr]);
-		irq_enter();
-		(*ipi_types[ipinr].handler)();
-		irq_exit();
-	} else
-		pr_debug("CPU%u: Unknown IPI message 0x%x\n", cpu, ipinr);
 
+	switch (ipinr) {
+	case IPI_WAKEUP:
+		break;
+
+	case IPI_TIMER:
+		irq_enter();
+		ipi_timer();
+		irq_exit();
+		break;
+
+	case IPI_RESCHEDULE:
+		scheduler_ipi();
+		break;
+
+	case IPI_CALL_FUNC:
+		irq_enter();
+		generic_smp_call_function_interrupt();
+		irq_exit();
+		break;
+
+	case IPI_CALL_FUNC_SINGLE:
+		irq_enter();
+		generic_smp_call_function_single_interrupt();
+		irq_exit();
+		break;
+
+	case IPI_CPU_STOP:
+		irq_enter();
+		ipi_cpu_stop(cpu);
+		irq_exit();
+		break;
+
+	default:
+		printk(KERN_CRIT "CPU%u: Unknown IPI message 0x%x\n",
+		       cpu, ipinr);
+		break;
+	}
 	set_irq_regs(old_regs);
 }
-
-/*
- * set_ipi_handler:
- * Interface provided for a kernel module to specify an IPI handler function.
- */
-int set_ipi_handler(int ipinr, void *handler, char *desc)
-{
-	unsigned int cpu = smp_processor_id();
-
-	if (ipi_types[ipinr].handler) {
-		pr_crit("CPU%u: IPI handler 0x%x already registered to %pf\n",
-					cpu, ipinr, ipi_types[ipinr].handler);
-		return -1;
-	}
-
-	ipi_types[ipinr].handler = handler;
-	ipi_types[ipinr].desc = desc;
-
-	return 0;
-}
-EXPORT_SYMBOL(set_ipi_handler);
-
-/*
- * clear_ipi_handler:
- * Interface provided for a kernel module to clear an IPI handler function.
- */
-void clear_ipi_handler(int ipinr)
-{
-	ipi_types[ipinr].handler = NULL;
-	ipi_types[ipinr].desc = NULL;
-}
-EXPORT_SYMBOL(clear_ipi_handler);
 
 void smp_send_reschedule(int cpu)
 {
