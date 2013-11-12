@@ -1138,6 +1138,7 @@ void syscall_init(void)
 DEFINE_PER_CPU(struct orig_ist, orig_ist);
 
 static DEFINE_PER_CPU(unsigned long, debug_stack_addr);
+#ifndef CONFIG_IPIPE
 DEFINE_PER_CPU(int, debug_stack_usage);
 
 int is_debug_stack(unsigned long addr)
@@ -1162,6 +1163,7 @@ void debug_stack_reset(void)
 	if (this_cpu_dec_return(debug_stack_use_ctr) == 0)
 		load_idt((const struct desc_ptr *)&idt_descr);
 }
+#endif /* !CONFIG_IPIPE */
 
 #else	/* CONFIG_X86_64 */
 

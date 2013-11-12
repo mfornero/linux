@@ -39,6 +39,7 @@ EXPORT_SYMBOL(fcse_pids_cache_dirty);
 static unsigned random_pid;
 struct mm_struct *fcse_large_process;
 struct fcse_user fcse_pids_user[FCSE_NR_PIDS];
+static struct mm_struct *fcse_cur_mm = &init_mm;
 #endif /* CONFIG_ARM_FCSE_BEST_EFFORT */
 
 static inline void fcse_pid_reference_inner(unsigned fcse_pid)
@@ -222,51 +223,66 @@ static noinline int fcse_relocate_mm_to_pid(struct mm_struct *mm, int fcse_pid)
 	return fcse_pid;
 }
 
-int fcse_switch_mm_inner(struct mm_struct *next)
+static int fcse_flush_needed_p(struct mm_struct *next)
 {
 	unsigned fcse_pid = next->context.fcse.pid >> FCSE_PID_SHIFT;
-	static struct mm_struct *prev = &init_mm;
-	unsigned flush_needed, reused_pid = 0;
-	unsigned long flags;
+	unsigned flush_needed = 0;
 
-	if (unlikely(next == &init_mm)) {
-		raw_spin_lock_irqsave(&fcse_lock, flags);
-		goto is_flush_needed;
-	}
-
-	raw_spin_lock_irqsave(&fcse_lock, flags);
-	if (fcse_pids_user[fcse_pid].mm != next) {
+	if (next == &init_mm)
+		goto check_cur;
+	
+	if (fcse_pids_user[fcse_pid].mm != next)
 		if (fcse_pids_user[fcse_pid].mm)
-			reused_pid = test_bit(FCSE_PID_MAX - fcse_pid,
-					      fcse_pids_cache_dirty);
-		fcse_pids_user[fcse_pid].mm = next;
-	}
+			flush_needed = test_bit(FCSE_PID_MAX - fcse_pid,
+						fcse_pids_cache_dirty);
 
-	if (!reused_pid
+	if (flush_needed == 0
 	    && fcse_large_process
 	    && fcse_large_process != next
 	    && fcse_pid <= fcse_large_process->context.fcse.highest_pid)
-		reused_pid = 1;
+		flush_needed = 1;
 
-  is_flush_needed:
-	flush_needed = reused_pid
-		|| !prev
-		|| prev->context.fcse.shared_dirty_pages;
+  check_cur:
+	if (flush_needed == 0 && fcse_cur_mm->context.fcse.shared_dirty_pages)
+		flush_needed = 1;
+	
+	return flush_needed;
+}
 
-	fcse_pid_set(fcse_pid << FCSE_PID_SHIFT);
-	if (flush_needed)
-		fcse_clear_dirty_all();
-	if (next != &init_mm) {
-		__set_bit(FCSE_PID_MAX - fcse_pid, fcse_pids_cache_dirty);
-		if (next->context.fcse.large)
-			fcse_large_process = next;
-	}
-	prev = next;
+int fcse_switch_mm_start_inner(struct mm_struct *next)
+{
+	unsigned flush_needed;
+	unsigned long flags;
+
+	raw_spin_lock_irqsave(&fcse_lock, flags);
+	flush_needed = fcse_flush_needed_p(next);
 	raw_spin_unlock_irqrestore(&fcse_lock, flags);
 
 	return flush_needed;
 }
-EXPORT_SYMBOL_GPL(fcse_switch_mm_inner);
+EXPORT_SYMBOL_GPL(fcse_switch_mm_start_inner);
+
+void fcse_switch_mm_end_inner(struct mm_struct *next)
+{
+	unsigned fcse_pid = next->context.fcse.pid >> FCSE_PID_SHIFT;
+	unsigned long flags;
+
+	raw_spin_lock_irqsave(&fcse_lock, flags);
+	if (fcse_flush_needed_p(next))
+		fcse_clear_dirty_all();
+	
+	fcse_pid_set(fcse_pid << FCSE_PID_SHIFT);
+	if (next != &init_mm) {
+		__set_bit(FCSE_PID_MAX - fcse_pid, fcse_pids_cache_dirty);
+		if (next->context.fcse.large)
+			fcse_large_process = next;
+		if (fcse_pids_user[fcse_pid].mm != next)
+			fcse_pids_user[fcse_pid].mm = next;
+	}
+	fcse_cur_mm = next;
+	raw_spin_unlock_irqrestore(&fcse_lock, flags);
+}
+EXPORT_SYMBOL_GPL(fcse_switch_mm_end_inner);
 
 void fcse_pid_reference(unsigned fcse_pid)
 {

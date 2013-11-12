@@ -1119,7 +1119,7 @@ static void bfin_serial_console_putchar(struct uart_port *port, int ch)
 void __ipipe_serial_debug(const char *fmt, ...)
 {
 	struct bfin_serial_port *uart = bfin_serial_ports[0];
-	unsigned short status, tmp;
+	unsigned short status;
 	int flags, i, count;
 	char buf[128];
 	va_list ap;
@@ -1140,9 +1140,7 @@ void __ipipe_serial_debug(const char *fmt, ...)
 		} while (!(status & THRE));
 
 #ifndef CONFIG_BF54x
-		tmp = UART_GET_LCR(uart);
-		tmp &= ~DLAB;
-		UART_PUT_LCR(uart, tmp);
+		UART_CLEAR_DLAB(uart);
 #endif
 
 		UART_PUT_CHAR(uart, buf[i]);

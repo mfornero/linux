@@ -36,7 +36,7 @@
 #include <asm/traps.h>
 #include <asm/bitsperlong.h>
 
-#define IPIPE_CORE_RELEASE	1
+#define IPIPE_CORE_RELEASE	2
 
 #ifdef CONFIG_SMP
 #error "I-pipe/blackfin: SMP not implemented"
@@ -80,10 +80,6 @@ static inline const char *ipipe_clock_name(void)
 
 #define __ipipe_early_core_setup()	do { } while (0)
 
-extern atomic_t __ipipe_irq_lvdepth[IVG15 + 1];
-
-extern unsigned long __ipipe_irq_lvmask;
-
 /* enable/disable_irqdesc _must_ be used in pairs. */
 
 void __ipipe_enable_irqdesc(struct ipipe_domain *ipd,
@@ -96,9 +92,9 @@ void __ipipe_enable_pipeline(void);
 
 #define __ipipe_hook_critical_ipi(ipd) do { } while (0)
 
-void __ipipe_handle_irq(unsigned irq, struct pt_regs *regs);
-
 int __ipipe_get_irq_priority(unsigned int irq);
+
+void __ipipe_handle_irq(unsigned int irq, struct pt_regs *regs);
 
 void __ipipe_serial_debug(const char *fmt, ...);
 
@@ -130,7 +126,7 @@ static inline void ipipe_unmute_pic(void) { }
 
 static inline void ipipe_notify_root_preemption(void) { }
 
-#endif /* !CONFIG_IPIPE */
+#endif /* CONFIG_IPIPE */
 
 #ifdef CONFIG_TICKSOURCE_CORETMR
 #define IRQ_SYSTMR		IRQ_CORETMR

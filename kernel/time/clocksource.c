@@ -273,7 +273,9 @@ static void clocksource_watchdog(unsigned long data)
 retry:
 #endif
 		local_irq_disable();
+#ifdef CONFIG_IPIPE
 		wdref = watchdog->read(watchdog);
+#endif
 		csnow = cs->read(cs);
 		wdnow = watchdog->read(watchdog);
 		local_irq_enable();

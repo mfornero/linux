@@ -691,7 +691,7 @@ void ipipe_trace_panic_dump(void)
 
 			switch (point->type & IPIPE_TYPE_MASK) {
 				case IPIPE_TRACE_FUNC:
-					printk("	   ");
+					printk("           ");
 					break;
 
 				case IPIPE_TRACE_PID:

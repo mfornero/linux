@@ -391,7 +391,7 @@ int __ipipe_handle_exception(struct pt_regs *regs, long error_code, int vector)
 	if (vector == ex_do_page_fault)
 		cr2 = native_read_cr2();
 
-	if (unlikely(__ipipe_report_trap(vector, regs))) {
+	if (unlikely(__ipipe_notify_trap(vector, regs))) {
 		if (root_entry)
 			ipipe_restore_root_nosync(flags);
 		return 1;
@@ -497,7 +497,7 @@ int __ipipe_divert_exception(struct pt_regs *regs, int vector)
 skip_kgdb:
 #endif /* CONFIG_KGDB */
 
-	if (unlikely(__ipipe_report_trap(vector, regs))) {
+	if (unlikely(__ipipe_notify_trap(vector, regs))) {
 		if (root_entry)
 			ipipe_restore_root_nosync(flags);
 		return 1;

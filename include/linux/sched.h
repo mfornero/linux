@@ -164,16 +164,17 @@ print_cfs_rq(struct seq_file *m, int cpu, struct cfs_rq *cfs_rq)
 #define TASK_DEAD		64
 #define TASK_WAKEKILL		128
 #define TASK_WAKING		256
+#define TASK_PARKED		512
 #ifdef CONFIG_IPIPE
-#define TASK_HARDENING		512
-#define TASK_NOWAKEUP		1024
-#define TASK_STATE_MAX		2048
-#define TASK_STATE_TO_CHAR_STR "RSDTtZXxKWHN"
+#define TASK_HARDENING		1024
+#define TASK_NOWAKEUP		2048
+#define TASK_STATE_MAX		4096
+#define TASK_STATE_TO_CHAR_STR "RSDTtZXxKWPHN"
 #else  /* !CONFIG_IPIPE */
 #define TASK_HARDENING		0
 #define TASK_NOWAKEUP		0
-#define TASK_STATE_MAX		512
-#define TASK_STATE_TO_CHAR_STR "RSDTtZXxKW"
+#define TASK_STATE_MAX		1024
+#define TASK_STATE_TO_CHAR_STR "RSDTtZXxKWP"
 #endif /* CONFIG_IPIPE */
 
 extern char ___assert_task_state[1 - 2*!!(

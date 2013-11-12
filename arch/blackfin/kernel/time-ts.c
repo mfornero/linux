@@ -241,21 +241,6 @@ static void __init bfin_gptmr0_clockevent_init(struct clock_event_device *evt)
 /* per-cpu local core timer */
 DEFINE_PER_CPU(struct clock_event_device, coretmr_events);
 
-#ifdef CONFIG_CORE_TIMER_IRQ_L1
-__attribute__((l1_text))
-#endif
-static void bfin_coretmr_ack(void)
-{
-	bfin_write_TIMER_STATUS(1); /* Latch TIMIL0 */
-}
-
-#ifdef CONFIG_IPIPE
-struct ipipe_timer bfin_coretmr_itimer = {
-	.irq = IRQ_CORETMR,
-	.ack = &bfin_coretmr_ack,
-};
-#endif /* CONFIG_IPIPE */
-
 static int bfin_coretmr_set_next_event(unsigned long cycles,
 				struct clock_event_device *evt)
 {
@@ -323,8 +308,6 @@ irqreturn_t bfin_coretmr_interrupt(int irq, void *dev_id)
 	struct clock_event_device *evt = &per_cpu(coretmr_events, cpu);
 
 	smp_mb();
-	if (clockevent_ipipe_stolen(evt) == 0)
-		bfin_coretmr_ack();
 	evt->event_handler(evt);
 
 	touch_nmi_watchdog();
@@ -343,6 +326,9 @@ void bfin_coretmr_clockevent_init(void)
 	unsigned long clock_tick;
 	unsigned int cpu = smp_processor_id();
 	struct clock_event_device *evt = &per_cpu(coretmr_events, cpu);
+#ifdef CONFIG_IPIPE
+	extern struct ipipe_timer bfin_coretmr_itimer;
+#endif /* CONFIG_IPIPE */
 
 #ifdef CONFIG_SMP
 	evt->broadcast = smp_timer_broadcast;

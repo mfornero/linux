@@ -149,9 +149,9 @@ static int is_reserved_asid(u64 asid)
 	return 0;
 }
 
-static void new_context(struct mm_struct *mm, unsigned int cpu)
+static u64 new_context(struct mm_struct *mm, unsigned int cpu)
 {
-	u64 asid = mm->context.id;
+	u64 asid = atomic64_read(&mm->context.id);
 	u64 generation = atomic64_read(&asid_generation);
 
 	if (asid != 0 && is_reserved_asid(asid)) {
@@ -178,13 +178,14 @@ static void new_context(struct mm_struct *mm, unsigned int cpu)
 		cpumask_clear(mm_cpumask(mm));
 	}
 
-	mm->context.id = asid;
+	return asid;
 }
 
 int check_and_switch_context(struct mm_struct *mm, struct task_struct *tsk, bool root_p)
 {
 	unsigned long flags;
 	unsigned int cpu = ipipe_processor_id();
+	u64 asid;
 
 	if (unlikely(mm->context.vmalloc_seq != init_mm.context.vmalloc_seq))
 		__check_vmalloc_seq(mm);
@@ -198,8 +199,9 @@ int check_and_switch_context(struct mm_struct *mm, struct task_struct *tsk, bool
 	 */
 	cpu_set_reserved_ttbr0();
 
-	if (!((mm->context.id ^ atomic64_read(&asid_generation)) >> ASID_BITS)
-	    && atomic64_xchg(&per_cpu(active_asids, cpu), mm->context.id))
+	asid = atomic64_read(&mm->context.id);
+	if (!((asid ^ atomic64_read(&asid_generation)) >> ASID_BITS)
+	    && atomic64_xchg(&per_cpu(active_asids, cpu), asid))
 		goto switch_mm_fastpath;
 
 #ifdef CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH
@@ -208,15 +210,17 @@ int check_and_switch_context(struct mm_struct *mm, struct task_struct *tsk, bool
 	raw_spin_lock_irqsave(&cpu_asid_lock, flags);
 #endif /* !CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH */
 	/* Check that our ASID belongs to the current generation. */
-	if ((mm->context.id ^ atomic64_read(&asid_generation)) >> ASID_BITS)
-		new_context(mm, cpu);
-
-	atomic64_set(&per_cpu(active_asids, cpu), mm->context.id);
-	cpumask_set_cpu(cpu, mm_cpumask(mm));
+	asid = atomic64_read(&mm->context.id);
+	if ((asid ^ atomic64_read(&asid_generation)) >> ASID_BITS) {
+		asid = new_context(mm, cpu);
+		atomic64_set(&mm->context.id, asid);
+	}
 
 	if (cpumask_test_and_clear_cpu(cpu, &tlb_flush_pending))
 		local_flush_tlb_all();
 
+	atomic64_set(&per_cpu(active_asids, cpu), asid);
+	cpumask_set_cpu(cpu, mm_cpumask(mm));
 #ifdef CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH
 	raw_spin_unlock(&cpu_asid_lock);
 #else /* !CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH */
