@@ -87,6 +87,9 @@ void show_regs(struct pt_regs *regs)
 	int i;
 
 	__show_regs(regs, !user_mode_vm(regs));
+#ifdef CONFIG_IPIPE
+	pr_emerg("I-pipe domain %s\n", ipipe_current_domain->name);
+#endif /* CONFIG_IPIPE */
 
 	pr_emerg("Process %.*s (pid: %d, ti=%p task=%p task.ti=%p)\n",
 		 TASK_COMM_LEN, current->comm, task_pid_nr(current),

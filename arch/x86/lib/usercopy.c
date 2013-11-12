@@ -22,7 +22,7 @@ copy_from_user_nmi(void *to, const void __user *from, unsigned long n)
 	void *map;
 	int ret;
 
-	if (__range_not_ok(from, n, TASK_SIZE))
+	if (__range_not_ok(from, n, TASK_SIZE) || !ipipe_root_p)
 		return len;
 
 	do {

@@ -41,7 +41,7 @@
 #define ASID_TO_IDX(asid)	((asid & ~ASID_MASK) - 1)
 #define IDX_TO_ASID(idx)	((idx + 1) & ~ASID_MASK)
 
-static DEFINE_RAW_SPINLOCK(cpu_asid_lock);
+static IPIPE_DEFINE_RAW_SPINLOCK(cpu_asid_lock);
 static atomic64_t asid_generation = ATOMIC64_INIT(ASID_FIRST_VERSION);
 static DECLARE_BITMAP(asid_map, NUM_USER_ASIDS);
 
@@ -181,14 +181,17 @@ static void new_context(struct mm_struct *mm, unsigned int cpu)
 	mm->context.id = asid;
 }
 
-void check_and_switch_context(struct mm_struct *mm, struct task_struct *tsk)
+int check_and_switch_context(struct mm_struct *mm, struct task_struct *tsk, bool root_p)
 {
 	unsigned long flags;
-	unsigned int cpu = smp_processor_id();
+	unsigned int cpu = ipipe_processor_id();
 
 	if (unlikely(mm->context.vmalloc_seq != init_mm.context.vmalloc_seq))
 		__check_vmalloc_seq(mm);
 
+#ifdef CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH
+	flags = hard_local_irq_save();
+#endif /* CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH */
 	/*
 	 * Required during context switch to avoid speculative page table
 	 * walking with the wrong TTBR.
@@ -199,7 +202,11 @@ void check_and_switch_context(struct mm_struct *mm, struct task_struct *tsk)
 	    && atomic64_xchg(&per_cpu(active_asids, cpu), mm->context.id))
 		goto switch_mm_fastpath;
 
+#ifdef CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH
+	raw_spin_lock(&cpu_asid_lock);
+#else /* !CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH */
 	raw_spin_lock_irqsave(&cpu_asid_lock, flags);
+#endif /* !CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH */
 	/* Check that our ASID belongs to the current generation. */
 	if ((mm->context.id ^ atomic64_read(&asid_generation)) >> ASID_BITS)
 		new_context(mm, cpu);
@@ -209,8 +216,18 @@ void check_and_switch_context(struct mm_struct *mm, struct task_struct *tsk)
 
 	if (cpumask_test_and_clear_cpu(cpu, &tlb_flush_pending))
 		local_flush_tlb_all();
+
+#ifdef CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH
+	raw_spin_unlock(&cpu_asid_lock);
+#else /* !CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH */
 	raw_spin_unlock_irqrestore(&cpu_asid_lock, flags);
+#endif /* CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH */
 
 switch_mm_fastpath:
-	cpu_switch_mm(mm->pgd, mm);
+	cpu_switch_mm(mm->pgd, mm, 1);
+#ifdef CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH
+	hard_local_irq_restore(flags);
+#endif /* CONFIG_IPIPE_WANT_PREEMPTIBLE_SWITCH */
+
+	return 0;
 }

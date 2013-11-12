@@ -22,7 +22,7 @@
 @
 #define S_OFF		8
 
-/* 
+/*
  * The SWI code relies on the fact that R0 is at the bottom of the stack
  * (due to slow/fast restore user regs).
  */
@@ -75,6 +75,13 @@
 
 #ifndef CONFIG_THUMB2_KERNEL
 	.macro	svc_exit, rpsr
+#ifdef CONFIG_IPIPE_TRACE_IRQSOFF
+	mov	r0, #2		/* IPIPE_TRACE_END */
+	mov	r3, #0x90000000
+	ldr	r2, [sp, #S_PC]
+	mov	r1, pc
+	bl	ipipe_trace_asm
+#endif /* CONFIG_IPIPE_TRACE_IRQSOFF */
 	msr	spsr_cxsf, \rpsr
 #if defined(CONFIG_CPU_V6)
 	ldr	r0, [sp]
@@ -89,6 +96,19 @@
 	.endm
 
 	.macro	restore_user_regs, fast = 0, offset = 0
+#ifdef CONFIG_IPIPE_TRACE_IRQSOFF
+	.if	\fast
+	mov	r4, r0
+	.endif
+	mov	r0, #2		/* IPIPE_TRACE_END */
+	mov	r3, #0x90000000
+	ldr	r2, [sp, #\offset + S_PC]
+	mov	r1, pc
+	bl	ipipe_trace_asm
+	.if	\fast
+	mov	r0, r4
+	.endif
+#endif /* CONFIG_IPIPE_TRACE_IRQSOFF */
 	ldr	r1, [sp, #\offset + S_PSR]	@ get calling cpsr
 	ldr	lr, [sp, #\offset + S_PC]!	@ get pc
 	msr	spsr_cxsf, r1			@ save in spsr_svc
@@ -121,6 +141,13 @@
 	.endm
 #else	/* CONFIG_THUMB2_KERNEL */
 	.macro	svc_exit, rpsr
+#ifdef CONFIG_IPIPE_TRACE_IRQSOFF
+	mov	r0, #2		/* IPIPE_TRACE_END */
+	mov	r3, #0x90000000
+	ldr	r2, [sp, #S_PC]
+	mov	r1, pc
+	bl	ipipe_trace_asm
+#endif /* CONFIG_IPIPE_TRACE_IRQSOFF */
 	ldr	lr, [sp, #S_SP]			@ top of the stack
 	ldrd	r0, r1, [sp, #S_LR]		@ calling lr and pc
 	clrex					@ clear the exclusive monitor
@@ -132,6 +159,19 @@
 	.endm
 
 	.macro	restore_user_regs, fast = 0, offset = 0
+#ifdef CONFIG_IPIPE_TRACE_IRQSOFF
+	.if	\fast
+	mov	r4, r0
+	.endif
+	mov	r0, #2		/* IPIPE_TRACE_END */
+	mov	r3, #0x90000000
+	ldr	r2, [sp, #\offset + S_PC]
+	mov	r1, pc
+	bl	ipipe_trace_asm
+	.if	\fast
+	mov	r0, r4
+	.endif
+#endif /* CONFIG_IPIPE_TRACE_IRQSOFF */
 	clrex					@ clear the exclusive monitor
 	mov	r2, sp
 	load_user_sp_lr r2, r3, \offset + S_SP	@ calling sp, lr
@@ -162,6 +202,12 @@
 	nop
 	.endm
 #endif	/* !CONFIG_THUMB2_KERNEL */
+
+	.macro slow_restore_user_regs
+	/* perform architecture specific actions before user return */
+	arch_ret_to_user r1, lr
+	restore_user_regs fast = 0, offset = 0
+       .endm
 
 /*
  * These are the registers used in the syscall handler, and allow us to

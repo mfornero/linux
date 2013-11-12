@@ -43,6 +43,7 @@ void __init setup_system_timer0(void)
 	set_gptimer_pwidth(TIMER0_id, 1);
 	SSYNC();
 	enable_gptimers(TIMER0bit);
+	bfin_ipipe_coretmr_register();
 }
 #else
 void __init setup_core_timer(void)

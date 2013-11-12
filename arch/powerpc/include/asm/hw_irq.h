@@ -40,6 +40,23 @@ extern void unknown_exception(struct pt_regs *regs);
 #ifdef CONFIG_PPC64
 #include <asm/paca.h>
 
+#ifdef CONFIG_PPC_BOOK3E
+#define __hard_irq_enable()	asm volatile("wrteei 1" : : : "memory")
+#define __hard_irq_disable()	asm volatile("wrteei 0" : : : "memory")
+#else
+#define __hard_irq_enable()	__mtmsrd(local_paca->kernel_msr | MSR_EE, 1)
+#define __hard_irq_disable()	__mtmsrd(local_paca->kernel_msr, 1)
+#endif
+
+static inline void hard_irq_disable(void)
+{
+	__hard_irq_disable();
+	get_paca()->soft_enabled = 0;
+	get_paca()->irq_happened |= PACA_IRQ_HARD_DIS;
+}
+
+#ifndef CONFIG_IPIPE
+
 static inline unsigned long arch_local_save_flags(void)
 {
 	unsigned long flags;
@@ -87,24 +104,6 @@ static inline bool arch_irqs_disabled(void)
 	return arch_irqs_disabled_flags(arch_local_save_flags());
 }
 
-#ifdef CONFIG_PPC_BOOK3E
-#define __hard_irq_enable()	asm volatile("wrteei 1" : : : "memory")
-#define __hard_irq_disable()	asm volatile("wrteei 0" : : : "memory")
-#else
-#define __hard_irq_enable()	__mtmsrd(local_paca->kernel_msr | MSR_EE, 1)
-#define __hard_irq_disable()	__mtmsrd(local_paca->kernel_msr, 1)
-#endif
-
-static inline void hard_irq_disable(void)
-{
-	__hard_irq_disable();
-	get_paca()->soft_enabled = 0;
-	get_paca()->irq_happened |= PACA_IRQ_HARD_DIS;
-}
-
-/* include/linux/interrupt.h needs hard_irq_disable to be a macro */
-#define hard_irq_disable	hard_irq_disable
-
 static inline bool lazy_irq_pending(void)
 {
 	return !!(get_paca()->irq_happened & ~PACA_IRQ_HARD_DIS);
@@ -122,6 +121,29 @@ static inline void may_hard_irq_enable(void)
 		__hard_irq_enable();
 }
 
+#else /* CONFIG_IPIPE */
+
+/*
+ * The built-in soft disabling mechanism is diverted to the pipeline
+ * when CONFIG_IPIPE is enabled. So we can't have any lazy DEC/EE
+ * pending in paca->irq_happened, and therefore we won't hard disable
+ * waiting for soft enabling.
+ */
+static inline bool lazy_irq_pending(void)
+{
+	return false;
+}
+
+static inline void may_hard_irq_enable(void)
+{
+	get_paca()->irq_happened &= ~PACA_IRQ_HARD_DIS;
+}
+
+#endif /* CONFIG_IPIPE */
+
+/* include/linux/interrupt.h needs hard_irq_disable to be a macro */
+#define hard_irq_disable	hard_irq_disable
+
 static inline bool arch_irq_disabled_regs(struct pt_regs *regs)
 {
 	return !regs->softe;
@@ -132,6 +154,8 @@ extern bool prep_irq_for_idle(void);
 #else /* CONFIG_PPC64 */
 
 #define SET_MSR_EE(x)	mtmsr(x)
+
+#ifndef CONFIG_IPIPE
 
 static inline unsigned long arch_local_save_flags(void)
 {
@@ -187,7 +211,9 @@ static inline bool arch_irqs_disabled(void)
 	return arch_irqs_disabled_flags(arch_local_save_flags());
 }
 
-#define hard_irq_disable()		arch_local_irq_disable()
+#endif /* !CONFIG_IPIPE */
+
+#define hard_irq_disable()		hard_local_irq_disable()
 
 static inline bool arch_irq_disabled_regs(struct pt_regs *regs)
 {
@@ -199,6 +225,8 @@ static inline void may_hard_irq_enable(void) { }
 #endif /* CONFIG_PPC64 */
 
 #define ARCH_IRQ_INIT_FLAGS	IRQ_NOREQUEST
+
+#include <asm/ipipe_hwirq.h>
 
 /*
  * interrupt-retrigger: should we handle this via lost interrupts and IPIs

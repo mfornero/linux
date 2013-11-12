@@ -197,7 +197,7 @@ int __kprobes do_page_fault(struct pt_regs *regs, unsigned long address,
 			    unsigned long error_code)
 {
 	struct vm_area_struct * vma;
-	struct mm_struct *mm = current->mm;
+	struct mm_struct *mm;
 	unsigned int flags = FAULT_FLAG_ALLOW_RETRY | FAULT_FLAG_KILLABLE;
 	int code = SEGV_MAPERR;
 	int is_write = 0;
@@ -205,6 +205,10 @@ int __kprobes do_page_fault(struct pt_regs *regs, unsigned long address,
  	int is_exec = trap == 0x400;
 	int fault;
 
+	if (__ipipe_report_trap(IPIPE_TRAP_ACCESS, regs))
+		return 0;
+
+	mm = current->mm;
 #if !(defined(CONFIG_4xx) || defined(CONFIG_BOOKE))
 	/*
 	 * Fortunately the bit assignments in SRR1 for an instruction

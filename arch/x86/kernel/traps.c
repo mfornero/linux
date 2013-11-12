@@ -605,6 +605,7 @@ asmlinkage void __attribute__((weak)) smp_threshold_interrupt(void)
 void math_state_restore(void)
 {
 	struct task_struct *tsk = current;
+	unsigned long flags;
 
 	if (!tsk_used_math(tsk)) {
 		local_irq_enable();
@@ -621,6 +622,7 @@ void math_state_restore(void)
 		local_irq_disable();
 	}
 
+	flags = hard_cond_local_irq_save();
 	__thread_fpu_begin(tsk);
 
 	/*
@@ -628,11 +630,13 @@ void math_state_restore(void)
 	 */
 	if (unlikely(restore_fpu_checking(tsk))) {
 		drop_init_fpu(tsk);
+		hard_cond_local_irq_enable();
 		force_sig(SIGSEGV, tsk);
 		return;
 	}
 
 	tsk->fpu_counter++;
+	hard_cond_local_irq_restore(flags);
 }
 EXPORT_SYMBOL_GPL(math_state_restore);
 

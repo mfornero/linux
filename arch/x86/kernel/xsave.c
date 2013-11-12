@@ -563,6 +563,10 @@ static void __init xstate_enable_boot_cpu(void)
 	if (cpu_has_xsaveopt && eagerfpu != DISABLE)
 		eagerfpu = ENABLE;
 
+#ifdef CONFIG_IPIPE
+	eagerfpu = DISABLE;
+#endif
+
 	pr_info("enabled xstate_bv 0x%llx, cntxt size 0x%x\n",
 		pcntxt_mask, xstate_size);
 }

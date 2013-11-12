@@ -9,6 +9,7 @@ config 64BIT
 config X86_32
 	def_bool y
 	depends on !64BIT
+	select IPIPE_WANT_CLOCKSOURCE if IPIPE
 	select CLKSRC_I8253
 	select HAVE_UID16
 
@@ -20,6 +21,9 @@ config X86_64
 ### Arch settings
 config X86
 	def_bool y
+	select IPIPE_HAVE_HOSTRT if IPIPE
+	select IPIPE_HAVE_VM_NOTIFIER if IPIPE
+	select IPIPE_HAVE_SAFE_THREAD_INFO if X86_64
 	select HAVE_AOUT if X86_32
 	select HAVE_UNSTABLE_SCHED_CLOCK
 	select ARCH_SUPPORTS_NUMA_BALANCING
@@ -104,7 +108,7 @@ config X86
 	select GENERIC_CLOCKEVENTS
 	select ARCH_CLOCKSOURCE_DATA if X86_64
 	select GENERIC_CLOCKEVENTS_BROADCAST if X86_64 || (X86_32 && X86_LOCAL_APIC)
-	select GENERIC_TIME_VSYSCALL if X86_64
+	select GENERIC_TIME_VSYSCALL if X86_64 || IPIPE
 	select KTIME_SCALAR if X86_32
 	select GENERIC_STRNCPY_FROM_USER
 	select GENERIC_STRNLEN_USER
@@ -570,6 +574,7 @@ config SCHED_OMIT_FRAME_POINTER
 
 menuconfig PARAVIRT_GUEST
 	bool "Paravirtualized guest support"
+	depends on !IPIPE
 	---help---
 	  Say Y here to get to see options related to running Linux under
 	  various hypervisors.  This option alone does not add any kernel code.
@@ -609,6 +614,7 @@ source "arch/x86/lguest/Kconfig"
 
 config PARAVIRT
 	bool "Enable paravirtualization code"
+	depends on !IPIPE
 	---help---
 	  This changes the kernel so it can modify itself when it is run
 	  under a hypervisor, potentially improving performance significantly
@@ -812,6 +818,8 @@ config SCHED_MC
 	  increased overhead in some places. If unsure say N here.
 
 source "kernel/Kconfig.preempt"
+
+source "kernel/ipipe/Kconfig"
 
 config X86_UP_APIC
 	bool "Local APIC support on uniprocessors"

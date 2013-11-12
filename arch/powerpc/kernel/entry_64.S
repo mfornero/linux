@@ -34,6 +34,12 @@
 #include <asm/ftrace.h>
 #include <asm/hw_irq.h>
 
+#ifdef CONFIG_IPIPE
+#define PREEMPT_SCHEDULE_IRQ	.__ipipe_preempt_schedule_irq
+#else
+#define PREEMPT_SCHEDULE_IRQ	.preempt_schedule_irq
+#endif
+
 /*
  * System calls.
  */
@@ -138,6 +144,23 @@ END_FW_FTR_SECTION_IFSET(FW_FEATURE_SPLPAR)
 	 */
 	li	r10,1
 	std	r10,SOFTE(r1)
+
+#ifdef CONFIG_IPIPE
+	addi	r3,r1,GPR0
+	bl	.__ipipe_syscall_root
+	cmpwi	r3,0
+	ld	r0,GPR0(r1)
+	ld	r3,GPR3(r1)
+	ld	r4,GPR4(r1)
+	ld	r5,GPR5(r1)
+	ld	r6,GPR6(r1)
+	ld	r7,GPR7(r1)
+	ld	r8,GPR8(r1)
+	ld	r9,GPR9(r1)
+	bgt	ipipe_end_syscall
+	blt	syscall_exit
+	addi	r9,r1,STACK_FRAME_OVERHEAD /* we trashed it, fix it up */
+#endif /* CONFIG_IPIPE */
 
 #ifdef SHOW_SYSCALLS
 	bl	.do_show_syscall
@@ -264,6 +287,23 @@ syscall_dotrace:
 	ld	r10,TI_FLAGS(r10)
 	b	.Lsyscall_dotrace_cont
 
+#ifdef CONFIG_IPIPE
+	/*
+	 * We get there upon return from __ipipe_syscall_root,
+	 * with hw interrupts off.
+	 */
+ipipe_end_syscall:
+	ld	r8,_MSR(r1)
+#ifdef CONFIG_PPC_BOOK3S
+	/* No MSR:RI on BookE */
+	andi.	r10,r8,MSR_RI
+	beq-	unrecov_restore
+#endif
+	ld	r5,_CCR(r1)
+	mfmsr	r10
+	b	.Lsyscall_error_cont
+#endif /* CONFIG_IPIPE */
+
 syscall_enosys:
 	li	r3,-ENOSYS
 	b	syscall_exit
@@ -305,6 +345,18 @@ syscall_exit_work:
 	andi.	r0,r9,(_TIF_SYSCALL_T_OR_A|_TIF_SINGLESTEP)
 	beq	.ret_from_except_lite
 
+#ifdef CONFIG_IPIPE_TRACE_IRQSOFF
+	bl	.save_nvgprs
+	bl	.__ipipe_trace_irqson
+#ifdef CONFIG_PPC_BOOK3E
+	wrteei	1
+#else
+	/* Re-enable interrupts */
+	mfmsr	r10
+	ori	r10,r10,MSR_EE
+	mtmsrd	r10,1
+#endif /* CONFIG_PPC_BOOK3E */
+#else /* !CONFIG_IPIPE_TRACE_IRQSOFF */
 	/* Re-enable interrupts */
 #ifdef CONFIG_PPC_BOOK3E
 	wrteei	1
@@ -315,6 +367,7 @@ syscall_exit_work:
 #endif /* CONFIG_PPC_BOOK3E */
 
 	bl	.save_nvgprs
+#endif /* !CONFIG_IPIPE_TRACE_IRQSOFF */
 	addi	r3,r1,STACK_FRAME_OVERHEAD
 	bl	.do_syscall_trace_leave
 	b	.ret_from_except
@@ -365,6 +418,22 @@ _GLOBAL(ppc64_swapcontext)
 	b	syscall_exit
 
 _GLOBAL(ret_from_fork)
+#ifdef CONFIG_IPIPE
+#ifdef CONFIG_IPIPE_TRACE_IRQSOFF
+	stdu	r1,-8(r1)
+	std	r3,0(r1)
+	bl	.__ipipe_trace_irqson
+	ld	r3,0(r1)
+	addi	r1,r1,8
+#endif /* CONFIG_IPIPE_TRACE_IRQSOFF */
+#ifdef CONFIG_PPC_BOOK3E
+	wrteei	1
+#else /* !CONFIG_PPC_BOOK3E */
+	mfmsr	r10
+	ori	r10,r10,MSR_EE
+	mtmsrd	r10,1
+#endif /* !CONFIG_PPC_BOOK3E */
+#endif /* CONFIG_IPIPE */
 	bl	.schedule_tail
 	REST_NVGPRS(r1)
 	li	r3,0
@@ -562,6 +631,14 @@ END_FTR_SECTION_IFSET(CPU_FTR_DSCR)
 	addi	r1,r1,SWITCH_FRAME_SIZE
 	blr
 
+#ifdef CONFIG_IPIPE
+_GLOBAL(__ipipe_ret_from_except_lite)
+	cmpwi	r3,0
+	/* FIXME: branching to __ipipe_check_root is useless here */
+	bne+	.ret_from_except_lite
+	b	restore
+#endif /* CONFIG_IPIPE */
+
 	.align	7
 _GLOBAL(ret_from_except)
 	ld	r11,_TRAP(r1)
@@ -582,6 +659,16 @@ _GLOBAL(ret_from_except_lite)
 	mtmsrd	r10,1		  /* Update machine state */
 #endif /* CONFIG_PPC_BOOK3E */
 
+#ifdef CONFIG_IPIPE
+#ifdef CONFIG_IPIPE_TRACE_IRQSOFF
+	bl	.__ipipe_trace_irqsoff
+#endif
+	bl	.__ipipe_check_root
+	cmpwi	r3,0
+	mfmsr	r10		/* this is used later, might be messed */
+	beq-	restore
+#endif /* CONFIG_IPIPE */
+
 	CURRENT_THREAD_INFO(r9, r1)
 	ld	r3,_MSR(r1)
 	ld	r4,TI_FLAGS(r9)
@@ -595,6 +682,9 @@ _GLOBAL(ret_from_except_lite)
 	andi.	r0,r4,_TIF_NEED_RESCHED
 	beq	1f
 	bl	.restore_interrupts
+#ifdef CONFIG_IPIPE_TRACE_IRQSOFF
+	bl	.__ipipe_trace_irqson
+#endif /* CONFIG_IPIPE_TRACE_IRQSOFF */
 	bl	.schedule
 	b	.ret_from_except_lite
 
@@ -657,7 +747,12 @@ resume_kernel:
 	 * sure we are soft-disabled first
 	 */
 	SOFT_DISABLE_INTS(r3,r4)
-1:	bl	.preempt_schedule_irq
+	/*
+	 * Call the scheduler with soft IRQs off. When the interrupt
+	 * pipeline is enabled, we enter the IRQ preemption code with hw
+	 * interrupts disabled as well.
+	 */
+1:	bl	PREEMPT_SCHEDULE_IRQ
 
 	/* Re-test flags and eventually loop */
 	CURRENT_THREAD_INFO(r9, r1)
@@ -842,12 +937,20 @@ restore_check_irq_replay:
 	cmpwi	cr0,r3,0x500
 	bne	1f
 	addi	r3,r1,STACK_FRAME_OVERHEAD;
+#ifdef CONFIG_IPIPE
+ 	bl	.__ipipe_grab_irq
+#else	
  	bl	.do_IRQ
+#endif	
 	b	.ret_from_except
 1:	cmpwi	cr0,r3,0x900
 	bne	1f
 	addi	r3,r1,STACK_FRAME_OVERHEAD;
+#ifdef CONFIG_IPIPE
+ 	bl	.__ipipe_grab_timer
+#else	
 	bl	.timer_interrupt
+#endif	
 	b	.ret_from_except
 #ifdef CONFIG_PPC_BOOK3E
 1:	cmpwi	cr0,r3,0x280
@@ -1075,6 +1178,10 @@ _GLOBAL(_mcount)
 	blr
 
 _GLOBAL(ftrace_caller)
+        LOAD_REG_IMMEDIATE(r3, function_trace_stop)
+        lwz     r3, 0(r3)
+        cmpwi   r3, 0
+        bne     ftrace_stub
 	/* Taken from output of objdump from lib64/glibc */
 	mflr	r3
 	ld	r11, 0(r1)
@@ -1102,6 +1209,10 @@ _GLOBAL(mcount)
 	blr
 
 _GLOBAL(_mcount)
+        LOAD_REG_IMMEDIATE(r3, function_trace_stop)
+        lwz     r3, 0(r3)
+        cmpwi   r3, 0
+        bne     ftrace_stub
 	/* Taken from output of objdump from lib64/glibc */
 	mflr	r3
 	ld	r11, 0(r1)
