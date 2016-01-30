@@ -55,4 +55,13 @@ config XILINX_PR_DECOUPLER
 
 endif # FPGA
 
+config FPGA_OVERLAY
+	tristate "FPGA Overlay Support"
+	depends on OF_DYNAMIC && OF_OVERLAY
+	select OF_EARLY_FLATTREE
+	select OF_RESOLVE
+	help
+	  FPGA Overlay manager to load/unload overlays for FPGA fabric.
+
+
 endmenu
