@@ -17,3 +17,7 @@ obj-$(CONFIG_OF_OVERLAY) += overlay.o
 obj-$(CONFIG_OF_NUMA) += of_numa.o
 
 obj-$(CONFIG_OF_UNITTEST) += unittest-data/
+
+CFLAGS_resolver.o += -O0
+CFLAGS_base.o += -O0
+CFLAGS_address.o += -O0

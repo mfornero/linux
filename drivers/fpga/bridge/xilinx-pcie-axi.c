@@ -19,8 +19,8 @@ static int xilinx_pcie_axi_probe(struct pci_dev *pdev,
 	const struct firmware *fdt_self;
 
 	status = request_firmware(&fdt_self, firmware_file, &pdev->dev);
-	if (status)
-		return status;
+	if (status == -ENOENT)
+		return -EPROBE_DEFER;
 
 	status = pcie_axi_bridge_register(pdev, xilinx_pab_compat, fdt_self,
 		&xilinx_pcie_axi_overlay_ops, NULL);

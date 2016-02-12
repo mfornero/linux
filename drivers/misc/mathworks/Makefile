@@ -16,3 +16,7 @@ mwipcore_iio_streaming-objs := mw_stream_iio_channel.o
 mwipcore_iio_mm-objs := mw_mm_iio_channel.o
 mwipcore-objs := mathworks_ipcore.o
 
+CFLAGS_mwipcore_iio_streaming.o += -O0
+CFLAGS_mwipcore.o += -O0
+CFLAGS_mwipcore_iio_mm.o += -O0
+CFLAGS_mathworks_ip_common.o += -O0

@@ -34,3 +34,5 @@ obj-y += pressure/
 obj-y += proximity/
 obj-y += temperature/
 obj-y += trigger/
+
+CFLAGS_industrialio-buffer.o += -O0
