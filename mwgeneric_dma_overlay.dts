@@ -1,0 +1,38 @@
+/dts-v1/;
+/plugin/;
+/{
+    
+    fragment@0 {
+        target-path = "/system/bridge@0xC0000000";
+        /* suppress DTC warning */
+        #address-cells = <2>;
+        #size-cells = <1>;
+
+        __overlay__ {
+            /* suppress DTC warning */
+            #address-cells = <2>;
+            #size-cells = <1>;
+            
+            axi_intc:axi_intc@0x01000000 {
+                compatible = "xlnx,xps-intc-1.00.a";
+                reg = <0x0 0x01000000 0x20>;
+                interrupts = <0x0 0x1>;
+                interrupt-controller;
+                #interrupt-cells = <0x1>;
+                xlnx,num-intr-inputs = <32>;
+                xlnx,kind-of-intr = <0xFFFFFFFF>;
+            };
+
+            mwgeneric0@0 {
+                compatible = "mathworks,mwgeneric-v1.00";
+                reg = <0x0 0x0 0x10000>;
+                mwgen,ipname = "mw,mwgeneric";
+                mwgen,devname = "mwgeneric";
+                mwgen,ipinst = "mwgeneric";
+                mwgen,ipver = "1.00";
+                interrupts = <0x0>;
+                interrupt-parent = <&axi_intc>;
+            };
+        };
+    };
+};
