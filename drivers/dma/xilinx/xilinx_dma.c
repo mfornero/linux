@@ -320,6 +320,7 @@ struct xilinx_dma_tx_descriptor {
  * @has_sg: Support scatter transfers
  * @cyclic: Check for cyclic transfers.
  * @genlock: Support genlock mode
+ * @no_coalesce: Do not coalesce interrupts
  * @err: Channel has errors
  * @idle: Check for channel idle
  * @tasklet: Cleanup work after irq
@@ -350,6 +351,7 @@ struct xilinx_dma_chan {
 	bool has_sg;
 	bool cyclic;
 	bool genlock;
+	bool no_coalesce;
 	bool err;
 	bool idle;
 	struct tasklet_struct tasklet;
@@ -1143,7 +1145,8 @@ static void xilinx_cdma_start_transfer(struct xilinx_dma_chan *chan)
 	tail_segment = list_last_entry(&tail_desc->segments,
 				       struct xilinx_cdma_tx_segment, node);
 
-	if (chan->desc_pendingcount <= XILINX_DMA_COALESCE_MAX) {
+	if (chan->desc_pendingcount <= XILINX_DMA_COALESCE_MAX &&
+			!chan->no_coalesce) {
 		ctrl_reg &= ~XILINX_DMA_CR_COALESCE_MAX;
 		ctrl_reg |= chan->desc_pendingcount <<
 				XILINX_DMA_CR_COALESCE_SHIFT;
@@ -1227,7 +1230,8 @@ static void xilinx_dma_start_transfer(struct xilinx_dma_chan *chan)
 
 	reg = dma_ctrl_read(chan, XILINX_DMA_REG_DMACR);
 
-	if (chan->desc_pendingcount <= XILINX_DMA_COALESCE_MAX) {
+	if (chan->desc_pendingcount <= XILINX_DMA_COALESCE_MAX &&
+			!chan->no_coalesce) {
 		reg &= ~XILINX_DMA_CR_COALESCE_MAX;
 		reg |= chan->desc_pendingcount <<
 				  XILINX_DMA_CR_COALESCE_SHIFT;
@@ -1334,6 +1338,8 @@ static void xilinx_dma_complete_descriptor(struct xilinx_dma_chan *chan)
 		if (!desc->cyclic)
 			dma_cookie_complete(&desc->async_tx);
 		list_add_tail(&desc->node, &chan->done_list);
+		if (chan->no_coalesce)
+			return; /* one interrupt per desc */
 	}
 }
 
@@ -1444,7 +1450,8 @@ static irqreturn_t xilinx_dma_irq_handler(int irq, void *data)
 	if (status & XILINX_DMA_DMASR_FRM_CNT_IRQ) {
 		spin_lock(&chan->lock);
 		xilinx_dma_complete_descriptor(chan);
-		chan->idle = true;
+		if (list_empty(&chan->active_list))
+			chan->idle = true;
 		chan->start_transfer(chan);
 		spin_unlock(&chan->lock);
 	}
@@ -2335,6 +2342,9 @@ static int xilinx_dma_chan_probe(struct xilinx_dma_device *xdev,
 	has_dre = of_property_read_bool(node, "xlnx,include-dre");
 
 	chan->genlock = of_property_read_bool(node, "xlnx,genlock-mode");
+
+	/* The no interrupt coalesce param is optional*/
+	chan->no_coalesce = of_property_read_bool(node, "xlnx,no-coalesce");
 
 	err = of_property_read_u32(node, "xlnx,datawidth", &value);
 	if (err) {
