@@ -20,12 +20,13 @@
 #include <linux/slab.h>
 #include <linux/wait.h>
 #include <linux/dma/xilinx_dma.h>
+#include <linux/semaphore.h>
 
 static unsigned int test_buf_size = 64;
 module_param(test_buf_size, uint, S_IRUGO);
 MODULE_PARM_DESC(test_buf_size, "Size of the memcpy test buffer");
 
-static unsigned int iterations = 5;
+static unsigned int iterations = 1;
 module_param(iterations, uint, S_IRUGO);
 MODULE_PARM_DESC(iterations,
 		"Iterations before stopping test (default: infinite)");
@@ -46,6 +47,8 @@ MODULE_PARM_DESC(iterations,
 #define PATTERN_COPY		0x40
 #define PATTERN_OVERWRITE	0x20
 #define PATTERN_COUNT_MASK	0x1f
+#define PATTERN_HEADER(buf_idx) (1 << (buf_idx + 16))
+#define PATTERN_HEADER_SIZE 4
 
 struct dmatest_slave_thread {
 	struct list_head node;
@@ -101,17 +104,24 @@ static unsigned long dmatest_random(void)
 static void dmatest_init_srcs(u8 **bufs, unsigned int start, unsigned int len)
 {
 	unsigned int i;
+	unsigned int buf_cnt = 0;
 	u8 *buf;
+	u32 *buf32;
 
 	for (; (buf = *bufs); bufs++) {
 		for (i = 0; i < start; i++)
 			buf[i] = PATTERN_SRC | (~i & PATTERN_COUNT_MASK);
+		/* Mark the start of the frame */
+		buf32 = (u32*)&buf[i];
+		*buf32 = PATTERN_HEADER(buf_cnt);
+		i+=PATTERN_HEADER_SIZE;
 		for ( ; i < start + len; i++)
 			buf[i] = PATTERN_SRC | PATTERN_COPY
 				| (~i & PATTERN_COUNT_MASK);
 		for ( ; i < test_buf_size; i++)
 			buf[i] = PATTERN_SRC | (~i & PATTERN_COUNT_MASK);
 		buf++;
+		buf_cnt++;
 	}
 }
 
@@ -157,6 +167,33 @@ static void dmatest_mismatch(u8 actual, u8 pattern, unsigned int index,
 				thread_name, index, expected, actual);
 }
 
+static unsigned int dmatest_verify_bufheader(u8 **bufs, unsigned int start,
+		bool is_srcbuf)
+{
+	unsigned int error_count = 0;
+	u8 *buf;
+	u32 *buf32;
+	int buf_cnt = 0;
+	const char *thread_name = current->comm;
+
+
+	for (; (buf = *bufs); bufs++) {
+		buf32 = (u32 *)&buf[start];
+		if (*buf32 != PATTERN_HEADER(buf_cnt)){
+			if (is_srcbuf)
+				pr_warn("%s: srcbuf[0x%x] header mismatch! Expected %08x, got %08x\n",
+						thread_name, start, PATTERN_HEADER(buf_cnt), *buf32);
+			else
+				pr_warn("%s: dstbuf[0x%x] header mismatch! Expected %08x, got %08x\n",
+						thread_name, start, PATTERN_HEADER(buf_cnt), *buf32);
+			error_count++;
+		}
+		buf_cnt++;
+	}
+
+	return error_count;
+}
+
 static unsigned int dmatest_verify(u8 **bufs, unsigned int start,
 		unsigned int end, unsigned int counter, u8 pattern,
 		bool is_srcbuf)
@@ -190,14 +227,16 @@ static unsigned int dmatest_verify(u8 **bufs, unsigned int start,
 	return error_count;
 }
 
-static void dmatest_slave_tx_callback(void *completion)
+static void dmatest_slave_tx_callback(void *token)
 {
-	complete(completion);
+	struct semaphore *sem = token;
+	up(sem);
 }
 
-static void dmatest_slave_rx_callback(void *completion)
+static void dmatest_slave_rx_callback(void *token)
 {
-	complete(completion);
+	struct semaphore *sem = token;
+	up(sem);
 }
 
 /* Function for slave transfers
@@ -213,14 +252,14 @@ static int dmatest_slave_func(void *data)
 	unsigned int error_count;
 	unsigned int failed_tests = 0;
 	unsigned int total_tests = 0;
-	dma_cookie_t tx_cookie;
-	dma_cookie_t rx_cookie;
+	dma_cookie_t *tx_cookie;
+	dma_cookie_t *rx_cookie;
 	enum dma_status status;
 	enum dma_ctrl_flags flags;
 	int ret;
 	int src_cnt;
 	int dst_cnt;
-	int bd_cnt = 11;
+	int bd_cnt = 4;
 	int i;
 	thread_name = current->comm;
 
@@ -244,6 +283,11 @@ static int dmatest_slave_func(void *data)
 	}
 	thread->srcs[i] = NULL;
 
+	rx_cookie = kcalloc(src_cnt, sizeof(dma_cookie_t), GFP_KERNEL);
+	if(!rx_cookie)
+		goto err_rxcookie;
+
+
 	thread->dsts = kcalloc(dst_cnt+1, sizeof(u8 *), GFP_KERNEL);
 	if (!thread->dsts)
 		goto err_dsts;
@@ -253,6 +297,10 @@ static int dmatest_slave_func(void *data)
 			goto err_dstbuf;
 	}
 	thread->dsts[i] = NULL;
+
+	tx_cookie = kcalloc(dst_cnt, sizeof(dma_cookie_t), GFP_KERNEL);
+	if(!tx_cookie)
+		goto err_txcookie;
 
 	set_user_nice(current, 10);
 
@@ -266,14 +314,12 @@ static int dmatest_slave_func(void *data)
 		struct dma_async_tx_descriptor *rxd = NULL;
 		dma_addr_t dma_srcs[src_cnt];
 		dma_addr_t dma_dsts[dst_cnt];
-		struct completion rx_cmp;
-		struct completion tx_cmp;
+		struct semaphore rx_sem;
+		struct semaphore tx_sem;
 		unsigned long rx_tmo =
 				msecs_to_jiffies(300000); /* RX takes longer */
 		unsigned long tx_tmo = msecs_to_jiffies(30000);
 		u8 align = 0;
-		struct scatterlist tx_sg[bd_cnt];
-		struct scatterlist rx_sg[bd_cnt];
 
 		total_tests++;
 
@@ -288,7 +334,7 @@ static int dmatest_slave_func(void *data)
 			break;
 		}
 
-		len = dmatest_random() % test_buf_size + 1;
+		len = 16 % test_buf_size + 1;
 		len = (len >> align) << align;
 		if (!len)
 			len = 1 << align;
@@ -324,107 +370,139 @@ static int dmatest_slave_func(void *data)
 							DMA_DEV_TO_MEM);
 		}
 
-		sg_init_table(tx_sg, bd_cnt);
-		sg_init_table(rx_sg, bd_cnt);
+		sema_init(&rx_sem, 0);
+		sema_init(&tx_sem, 0);
 
+		/* Queue Up Rx Descriptors */
 		for (i = 0; i < bd_cnt; i++) {
-			sg_dma_address(&tx_sg[i]) = dma_srcs[i];
-			sg_dma_address(&rx_sg[i]) = dma_dsts[i] + dst_off;
+			rxd = dmaengine_prep_slave_single(rx_chan,
+					dma_dsts[i] + dst_off, len, DMA_DEV_TO_MEM, flags);
+			if (!rxd) {
+				for (i = 0; i < src_cnt; i++)
+					dma_unmap_single(tx_dev->dev, dma_srcs[i], len,
+							DMA_MEM_TO_DEV);
+				for (i = 0; i < dst_cnt; i++)
+					dma_unmap_single(rx_dev->dev, dma_dsts[i],
+							test_buf_size,
+							DMA_DEV_TO_MEM);
+				pr_warn(
+				"%s: #%u: prep error with src_off=0x%x ",
+					thread_name, total_tests - 1, src_off);
+				pr_warn("dst_off=0x%x len=0x%x\n",
+						dst_off, len);
+				msleep(100);
+				failed_tests++;
+				goto iteration_loop_end;
+			}
 
-			sg_dma_len(&tx_sg[i]) = len;
-			sg_dma_len(&rx_sg[i]) = len;
+			rxd->callback = dmatest_slave_rx_callback;
+			rxd->callback_param = &rx_sem;
+			rx_cookie[i] = rxd->tx_submit(rxd);
 
+			if (dma_submit_error(rx_cookie[i])) {
+				pr_warn(
+				"%s: #%u: submit error %d with src_off=0x%x ",
+						thread_name, total_tests - 1,
+						rx_cookie[i], src_off);
+				pr_warn("dst_off=0x%x len=0x%x\n",
+						dst_off, len);
+				msleep(100);
+				failed_tests++;
+				goto iteration_loop_end;
+			}
+			dma_async_issue_pending(rx_chan);
 		}
 
-		rxd = rx_dev->device_prep_slave_sg(rx_chan, rx_sg, bd_cnt,
-				DMA_DEV_TO_MEM, flags, NULL);
 
-		txd = tx_dev->device_prep_slave_sg(tx_chan, tx_sg, bd_cnt,
-				DMA_MEM_TO_DEV, flags, NULL);
+		/*Fire off the Tx Descriptors */
+		for (i = 0; i < bd_cnt; i++) {
 
-		if (!rxd || !txd) {
-			for (i = 0; i < src_cnt; i++)
-				dma_unmap_single(tx_dev->dev, dma_srcs[i], len,
-						DMA_MEM_TO_DEV);
-			for (i = 0; i < dst_cnt; i++)
-				dma_unmap_single(rx_dev->dev, dma_dsts[i],
-						test_buf_size,
-						DMA_DEV_TO_MEM);
-			pr_warn(
-			"%s: #%u: prep error with src_off=0x%x ",
-				thread_name, total_tests - 1, src_off);
-			pr_warn("dst_off=0x%x len=0x%x\n",
-					dst_off, len);
-			msleep(100);
-			failed_tests++;
-			continue;
+			txd = dmaengine_prep_slave_single(tx_chan,
+					dma_srcs[i], len, DMA_MEM_TO_DEV, flags);
+
+
+			if (!txd) {
+				for (i = 0; i < src_cnt; i++)
+					dma_unmap_single(tx_dev->dev, dma_srcs[i], len,
+							DMA_MEM_TO_DEV);
+				for (i = 0; i < dst_cnt; i++)
+					dma_unmap_single(rx_dev->dev, dma_dsts[i],
+							test_buf_size,
+							DMA_DEV_TO_MEM);
+				pr_warn(
+				"%s: #%u: prep error with src_off=0x%x ",
+					thread_name, total_tests - 1, src_off);
+				pr_warn("dst_off=0x%x len=0x%x\n",
+						dst_off, len);
+				msleep(100);
+				failed_tests++;
+				dmaengine_terminate_sync(rx_chan);
+				goto iteration_loop_end;
+			}
+
+			txd->callback = dmatest_slave_tx_callback;
+			txd->callback_param = &tx_sem;
+			tx_cookie[i] = txd->tx_submit(txd);
+			if (dma_submit_error(tx_cookie[i])) {
+				pr_warn(
+				"%s: #%u: submit error %d with src_off=0x%x ",
+						thread_name, total_tests - 1,
+						tx_cookie[i], src_off);
+				pr_warn("dst_off=0x%x len=0x%x\n",
+						dst_off, len);
+				msleep(100);
+				failed_tests++;
+				dmaengine_terminate_sync(rx_chan);
+				goto iteration_loop_end;
+			}
+			dma_async_issue_pending(tx_chan);
+
+			ret = down_timeout(&tx_sem, tx_tmo);
+
+			status = dma_async_is_tx_complete(tx_chan, tx_cookie[i],
+								NULL, NULL);
+
+			if (ret != 0) {
+				pr_warn("%s: #%u: tx test timed out\n",
+					   thread_name, total_tests - 1);
+				failed_tests++;
+				dmaengine_terminate_sync(rx_chan);
+				goto iteration_loop_end;
+			} else if (status != DMA_COMPLETE) {
+				pr_warn(
+				"%s: #%u: tx got completion callback, ",
+					   thread_name, total_tests - 1);
+				pr_warn("but status is \'%s\'\n",
+					   status == DMA_ERROR ? "error" :
+								"in progress");
+				failed_tests++;
+				dmaengine_terminate_sync(rx_chan);
+				goto iteration_loop_end;
+			}
+		}
+		/* Complete the Rx Descriptors */
+		for (i = 0; i < bd_cnt; i++) {
+			ret = down_timeout(&rx_sem, rx_tmo);
+			status = dma_async_is_tx_complete(rx_chan, rx_cookie[i],
+								NULL, NULL);
+
+			if (ret != 0) {
+				pr_warn("%s: #%u: rx test timed out\n",
+					   thread_name, total_tests - 1);
+				failed_tests++;
+				goto iteration_loop_end;
+			} else if (status != DMA_COMPLETE) {
+				pr_warn(
+				"%s: #%u: rx got completion callback, ",
+					   thread_name, total_tests - 1);
+				pr_warn("but status is \'%s\'\n",
+					   status == DMA_ERROR ? "error" :
+								"in progress");
+				failed_tests++;
+				goto iteration_loop_end;
+			}
 		}
 
-		init_completion(&rx_cmp);
-		rxd->callback = dmatest_slave_rx_callback;
-		rxd->callback_param = &rx_cmp;
-		rx_cookie = rxd->tx_submit(rxd);
-
-		init_completion(&tx_cmp);
-		txd->callback = dmatest_slave_tx_callback;
-		txd->callback_param = &tx_cmp;
-		tx_cookie = txd->tx_submit(txd);
-
-		if (dma_submit_error(rx_cookie) ||
-				dma_submit_error(tx_cookie)) {
-			pr_warn(
-			"%s: #%u: submit error %d/%d with src_off=0x%x ",
-					thread_name, total_tests - 1,
-					rx_cookie, tx_cookie, src_off);
-			pr_warn("dst_off=0x%x len=0x%x\n",
-					dst_off, len);
-			msleep(100);
-			failed_tests++;
-			continue;
-		}
-		dma_async_issue_pending(tx_chan);
-		dma_async_issue_pending(rx_chan);
-
-		tx_tmo = wait_for_completion_timeout(&tx_cmp, tx_tmo);
-
-		status = dma_async_is_tx_complete(tx_chan, tx_cookie,
-							NULL, NULL);
-
-		if (tx_tmo == 0) {
-			pr_warn("%s: #%u: tx test timed out\n",
-				   thread_name, total_tests - 1);
-			failed_tests++;
-			continue;
-		} else if (status != DMA_COMPLETE) {
-			pr_warn(
-			"%s: #%u: tx got completion callback, ",
-				   thread_name, total_tests - 1);
-			pr_warn("but status is \'%s\'\n",
-				   status == DMA_ERROR ? "error" :
-							"in progress");
-			failed_tests++;
-			continue;
-		}
-
-		rx_tmo = wait_for_completion_timeout(&rx_cmp, rx_tmo);
-		status = dma_async_is_tx_complete(rx_chan, rx_cookie,
-							NULL, NULL);
-
-		if (rx_tmo == 0) {
-			pr_warn("%s: #%u: rx test timed out\n",
-				   thread_name, total_tests - 1);
-			failed_tests++;
-			continue;
-		} else if (status != DMA_COMPLETE) {
-			pr_warn(
-			"%s: #%u: rx got completion callback, ",
-				   thread_name, total_tests - 1);
-			pr_warn("but status is \'%s\'\n",
-				   status == DMA_ERROR ? "error" :
-							"in progress");
-			failed_tests++;
-			continue;
-		}
 
 		/* Unmap by myself */
 		for (i = 0; i < dst_cnt; i++)
@@ -436,8 +514,9 @@ static int dmatest_slave_func(void *data)
 		pr_debug("%s: verifying source buffer...\n", thread_name);
 		error_count += dmatest_verify(thread->srcs, 0, src_off,
 				0, PATTERN_SRC, true);
-		error_count += dmatest_verify(thread->srcs, src_off,
-				src_off + len, src_off,
+		error_count += dmatest_verify_bufheader(thread->srcs, src_off, true);
+		error_count += dmatest_verify(thread->srcs, src_off+PATTERN_HEADER_SIZE,
+				src_off + len, src_off + PATTERN_HEADER_SIZE,
 				PATTERN_SRC | PATTERN_COPY, true);
 		error_count += dmatest_verify(thread->srcs, src_off + len,
 				test_buf_size, src_off + len,
@@ -447,8 +526,9 @@ static int dmatest_slave_func(void *data)
 				thread->task->comm);
 		error_count += dmatest_verify(thread->dsts, 0, dst_off,
 				0, PATTERN_DST, false);
-		error_count += dmatest_verify(thread->dsts, dst_off,
-				dst_off + len, src_off,
+		error_count += dmatest_verify_bufheader(thread->dsts, dst_off, false);
+		error_count += dmatest_verify(thread->dsts, dst_off+PATTERN_HEADER_SIZE,
+				dst_off + len, src_off + PATTERN_HEADER_SIZE,
 				PATTERN_SRC | PATTERN_COPY, false);
 		error_count += dmatest_verify(thread->dsts, dst_off + len,
 				test_buf_size, dst_off + len,
@@ -466,14 +546,20 @@ static int dmatest_slave_func(void *data)
 			pr_debug("src_off=0x%x dst_off=0x%x len=0x%x\n",
 				src_off, dst_off, len);
 		}
+iteration_loop_end:
+		continue;
 	}
 
 	ret = 0;
+	kfree(tx_cookie);
+err_txcookie:
 	for (i = 0; thread->dsts[i]; i++)
 		kfree(thread->dsts[i]);
 err_dstbuf:
 	kfree(thread->dsts);
 err_dsts:
+	kfree(rx_cookie);
+err_rxcookie:
 	for (i = 0; thread->srcs[i]; i++)
 		kfree(thread->srcs[i]);
 err_srcbuf:
@@ -588,15 +674,15 @@ static int xilinx_axidmatest_probe(struct platform_device *pdev)
 	int err;
 
 	chan = dma_request_slave_channel(&pdev->dev, "axidma0");
-	if (IS_ERR(chan)) {
-		pr_err("xilinx_dmatest: No Tx channel\n");
-		return PTR_ERR(chan);
+	if (!chan) {
+		pr_warn("xilinx_dmatest: No Tx channel\n");
+		return -EPROBE_DEFER;
 	}
 
 	rx_chan = dma_request_slave_channel(&pdev->dev, "axidma1");
-	if (IS_ERR(rx_chan)) {
-		err = PTR_ERR(rx_chan);
-		pr_err("xilinx_dmatest: No Rx channel\n");
+	if (!rx_chan) {
+		err = -EPROBE_DEFER;
+		pr_warn("xilinx_dmatest: No Rx channel\n");
 		goto free_tx;
 	}
 
